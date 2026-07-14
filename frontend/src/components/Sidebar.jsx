@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { Map, Users, UserCog, Clock, Home, Activity, Building2, MapPin, LandPlot, LogOut } from 'lucide-react';
 
 export default function Sidebar({ user, onLogout }) {
-  const navItems = [
+  let navItems = [
     { name: 'Live Map', path: '/map', icon: <Map size={18} /> },
     { name: 'Live Tracking', path: '/realtime', icon: <Activity size={18} /> },
     { name: 'Employees', path: '/employees', icon: <Users size={18} /> },
@@ -11,8 +11,11 @@ export default function Sidebar({ user, onLogout }) {
     { name: 'Franchises', path: '/franchises', icon: <Building2 size={18} /> },
     { name: 'Areas', path: '/areas', icon: <MapPin size={18} /> },
     { name: 'Municipalities', path: '/municipalities', icon: <LandPlot size={18} /> },
-    { name: 'Attendance', path: '/attendance', icon: <Clock size={18} /> },
   ];
+
+  if (user?.role === 'franchise_admin') {
+    navItems = navItems.filter(item => item.name !== 'Franchises' && item.name !== 'Municipalities');
+  }
 
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.2)] z-20 relative">

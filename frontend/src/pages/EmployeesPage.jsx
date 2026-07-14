@@ -86,8 +86,14 @@ export default function EmployeesPage({ user }) {
       const { data: areaData } = await supabase.from('areas').select('*');
       if (areaData) setAreas(areaData);
 
-      const { data: spvrData } = await supabase.from('supervisors').select('*');
-      if (spvrData) setSupervisors(spvrData);
+      let spvrData = [];
+      const { data: spvrRes } = await supabase.from('supervisors').select('*');
+      if (spvrRes) {
+        spvrData = user?.role === 'franchise_admin' 
+          ? spvrRes.filter(s => s.franchise_id === user.franchise_id)
+          : spvrRes;
+        setSupervisors(spvrData);
+      }
 
       const { data, error } = await supabase
         .from('employees')
@@ -100,7 +106,12 @@ export default function EmployeesPage({ user }) {
         .order('full_name');
         
       if (error) throw error;
-      setEmployees(data || []);
+      
+      let empData = data || [];
+      if (user?.role === 'franchise_admin') {
+        empData = empData.filter(e => e.franchise_id === user.franchise_id);
+      }
+      setEmployees(empData);
     } catch (error) {
       console.error('Error fetching employees:', error.message);
     } finally {

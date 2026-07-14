@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { Clock, Search, Calendar as CalendarIcon, Filter } from 'lucide-react';
 
-export default function AttendancePage() {
+export default function AttendancePage({ user }) {
   const [attendance, setAttendance] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -18,13 +18,19 @@ export default function AttendancePage() {
         .from('attendance')
         .select(`
           id, scan_time, status, scan_source, distance_meters,
-          employees (full_name, employee_id, role)
+          employees (full_name, employee_id, role, franchise_id)
         `)
         .order('scan_time', { ascending: false })
         .limit(100);
         
       if (error) throw error;
-      setAttendance(data || []);
+      
+      let attData = data || [];
+      if (user?.role === 'franchise_admin') {
+        attData = attData.filter(log => log.employees?.franchise_id === user.franchise_id);
+      }
+      
+      setAttendance(attData);
     } catch (error) {
       console.error('Error fetching attendance:', error.message);
     } finally {

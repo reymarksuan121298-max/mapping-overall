@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { UserCog, Search, Filter, Plus, Edit2, Trash2, X } from 'lucide-react';
 
-export default function SupervisorsPage() {
+export default function SupervisorsPage({ user }) {
   const [supervisors, setSupervisors] = useState([]);
   const [franchises, setFranchises] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,10 +38,14 @@ export default function SupervisorsPage() {
         
       if (error) throw error;
       
-      const enrichedData = (data || []).map(spvr => ({
+      let enrichedData = (data || []).map(spvr => ({
         ...spvr,
         employeeCount: spvr.employees ? spvr.employees.length : 0
       }));
+      
+      if (user?.role === 'franchise_admin') {
+        enrichedData = enrichedData.filter(s => s.franchise_id === user.franchise_id);
+      }
       
       setSupervisors(enrichedData);
     } catch (error) {
@@ -57,7 +61,7 @@ export default function SupervisorsPage() {
 
   const openAddModal = () => {
     setModalMode('add');
-    setFormData({ name: '', color: '#3b82f6', franchise_id: franchises[0]?.id || '' });
+    setFormData({ name: '', color: '#3b82f6', franchise_id: user?.franchise_id ? user.franchise_id.toString() : (franchises[0]?.id || '') });
     setEditingId(null);
     setIsModalOpen(true);
   };
@@ -303,19 +307,21 @@ export default function SupervisorsPage() {
                     <span className="text-sm text-slate-400 font-mono uppercase">{formData.color}</span>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Franchise</label>
-                  <select
-                    value={formData.franchise_id}
-                    onChange={(e) => setFormData({...formData, franchise_id: e.target.value})}
-                    className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
-                  >
-                    <option value="">Select Franchise</option>
-                    {franchises.map(f => (
-                      <option key={f.id} value={f.id}>{f.name}</option>
-                    ))}
-                  </select>
-                </div>
+                {(!user || !user.franchise_id) && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Franchise</label>
+                    <select
+                      value={formData.franchise_id}
+                      onChange={(e) => setFormData({...formData, franchise_id: e.target.value})}
+                      className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
+                    >
+                      <option value="">Select Franchise</option>
+                      {franchises.map(f => (
+                        <option key={f.id} value={f.id}>{f.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="pt-4 flex gap-3">
                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold py-2.5 rounded-xl transition-colors">
                     Cancel

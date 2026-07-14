@@ -38,7 +38,6 @@ function App() {
           <Route path="franchises" element={<FranchisesPage user={user} />} />
           <Route path="areas" element={<AreasPage user={user} />} />
           <Route path="municipalities" element={<MunicipalitiesPage user={user} />} />
-          <Route path="attendance" element={<AttendancePage user={user} />} />
           <Route path="realtime" element={<RealtimeMonitoringPage user={user} />} />
         </Route>
       </Routes>

@@ -151,13 +151,28 @@ export default function MapDashboard({ user }) {
 
       if (franchiseRes.data) setFranchises(franchiseRes.data);
       if (areaRes.data) setAreas(areaRes.data);
-      if (spvrRes.data) setSupervisors(spvrRes.data);
+      let supervisorsData = spvrRes.data || [];
+      if (user?.role === 'franchise_admin') {
+        supervisorsData = supervisorsData.filter(s => s.franchise_id === user.franchise_id);
+      }
+      setSupervisors(supervisorsData);
+
       if (muniRes.data) setMunicipalities(muniRes.data);
       
-      if (locRes && locRes.data) setSupervisorLocations(locRes.data);
+      let locData = locRes.data || [];
+      if (user?.role === 'franchise_admin') {
+        const allowedSupervisorIds = new Set(supervisorsData.map(s => s.id));
+        locData = locData.filter(l => allowedSupervisorIds.has(l.supervisor_id));
+      }
+      setSupervisorLocations(locData);
       
       if (employeeRes.error) throw employeeRes.error;
-      if (employeeRes.data) setEmployees(employeeRes.data);
+      
+      let empData = employeeRes.data || [];
+      if (user?.role === 'franchise_admin') {
+        empData = empData.filter(e => e.franchise_id === user.franchise_id);
+      }
+      setEmployees(empData);
       
     } catch (error) {
       console.error('Error fetching data:', error.message);
