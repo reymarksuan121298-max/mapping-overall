@@ -149,7 +149,12 @@ export default function MapDashboard({ user }) {
         supabase.from('supervisor_locations').select('*')
       ]);
 
-      if (franchiseRes.data) setFranchises(franchiseRes.data);
+      let fData = franchiseRes.data || [];
+      if (user?.role === 'franchise_admin') {
+        fData = fData.filter(f => f.id === user.franchise_id);
+      }
+      setFranchises(fData);
+      
       if (areaRes.data) setAreas(areaRes.data);
       let supervisorsData = spvrRes.data || [];
       if (user?.role === 'franchise_admin') {
