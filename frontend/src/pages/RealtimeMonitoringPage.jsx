@@ -35,6 +35,33 @@ const createSupervisorIcon = (color) => {
   return iconCache[safeColor];
 };
 
+const employeeIconCache = {};
+const createEmployeeIcon = (color) => {
+  const safeColor = color || '#3b82f6';
+  if (employeeIconCache[safeColor]) return employeeIconCache[safeColor];
+
+  const svgIcon = `
+    <svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="12" cy="12" r="10" fill="${safeColor}" stroke="white" stroke-width="2" />
+      <circle cx="12" cy="12" r="4" fill="white" />
+    </svg>
+  `;
+
+  employeeIconCache[safeColor] = new L.DivIcon({
+    className: 'custom-div-icon bg-transparent border-0',
+    html: `
+      <div class="relative flex items-center justify-center drop-shadow-md">
+        <div>${svgIcon}</div>
+      </div>
+    `,
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+    popupAnchor: [0, -8]
+  });
+  
+  return employeeIconCache[safeColor];
+};
+
 // Component to handle dynamic panning
 function MapController({ centerPos }) {
   const map = useMap();
@@ -52,6 +79,8 @@ export default function RealtimeMonitoringPage({ user }) {
   const [loading, setLoading] = useState(true);
   const [mapCenter, setMapCenter] = useState([8.242, 124.262]);
 
+  const [employees, setEmployees] = useState([]);
+
   const fetchData = async () => {
     try {
       // Fetch supervisor locations and join with supervisors and franchises
@@ -66,23 +95,26 @@ export default function RealtimeMonitoringPage({ user }) {
         `)
         .order('last_updated', { ascending: false });
 
+      const empQuery = supabase
+        .from('employees')
+        .select('id, full_name, latitude, longitude, supervisor_id, role, franchise_id')
+        .not('latitude', 'is', null)
+        .not('longitude', 'is', null);
+
+      const [locRes, empRes] = await Promise.all([query, empQuery]);
+
+      if (locRes.error) throw locRes.error;
+      if (empRes.error) throw empRes.error;
+
+      let filteredLocs = locRes.data;
+      let filteredEmps = empRes.data || [];
       if (user?.role === 'franchise_admin') {
-        // Technically franchise filtering on a join is complex in PostgREST, 
-        // we fetch all and filter in JS for simplicity on small datasets, 
-        // or we filter by inner join: eq('supervisors.franchise_id', user.franchise_id) - but that returns null for the relation.
-        // Let's fetch all and filter locally for now.
+         filteredLocs = locRes.data.filter(d => d.supervisors?.franchise_id === user.franchise_id);
+         filteredEmps = filteredEmps.filter(e => e.franchise_id === user.franchise_id);
       }
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      let filteredData = data;
-      if (user?.role === 'franchise_admin') {
-         filteredData = data.filter(d => d.supervisors?.franchise_id === user.franchise_id);
-      }
-
-      setLocations(filteredData || []);
+      setLocations(filteredLocs || []);
+      setEmployees(filteredEmps);
     } catch (err) {
       console.error('Error fetching live tracking data:', err);
     } finally {
@@ -235,7 +267,7 @@ export default function RealtimeMonitoringPage({ user }) {
             if (!loc.supervisors) return null;
             return (
               <Marker
-                key={loc.id}
+                key={`sup-${loc.id}`}
                 position={[loc.latitude, loc.longitude]}
                 icon={createSupervisorIcon(loc.supervisors.color)}
               >
@@ -249,6 +281,25 @@ export default function RealtimeMonitoringPage({ user }) {
               </Marker>
             );
           })}
+
+          {selectedSupervisor && employees
+            .filter(e => e.supervisor_id === selectedSupervisor)
+            .map(emp => (
+              <Marker
+                key={`emp-${emp.id}`}
+                position={[emp.latitude, emp.longitude]}
+                icon={createEmployeeIcon(locations.find(l => l.supervisor_id === selectedSupervisor)?.supervisors?.color || '#3b82f6')}
+              >
+                <Popup className="custom-popup">
+                  <div className="font-sans">
+                    <h3 className="font-bold text-slate-800">{emp.full_name}</h3>
+                    <p className="text-sm text-slate-500 mb-1">{emp.employee_id} • {emp.role}</p>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Assigned Employee</span>
+                  </div>
+                </Popup>
+              </Marker>
+            ))
+          }
         </MapContainer>
         
         {/* Map Overlay Controls could go here */}

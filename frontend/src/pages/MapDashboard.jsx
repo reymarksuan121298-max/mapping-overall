@@ -270,7 +270,7 @@ export default function MapDashboard({ user }) {
       full_name: '',
       role: 'Agent',
       supervisor_id: '',
-      franchise_id: '',
+      franchise_id: user?.franchise_id ? user.franchise_id.toString() : '',
       area_id: '',
       municipality_id: '',
       address: '',
@@ -592,19 +592,21 @@ export default function MapDashboard({ user }) {
 
                 {/* Right Column */}
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Franchise</label>
-                    <select
-                      value={employeeFormData.franchise_id}
-                      onChange={(e) => setEmployeeFormData({...employeeFormData, franchise_id: e.target.value, supervisor_id: '', municipality_id: ''})}
-                      className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
-                    >
-                      <option value="">Select Franchise</option>
-                      {franchises.map(f => (
-                        <option key={f.id} value={f.id}>{f.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {(!user || !user.franchise_id) && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Franchise</label>
+                      <select
+                        value={employeeFormData.franchise_id}
+                        onChange={(e) => setEmployeeFormData({...employeeFormData, franchise_id: e.target.value, supervisor_id: '', municipality_id: ''})}
+                        className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                      >
+                        <option value="">Select Franchise</option>
+                        {franchises.map(f => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Area & Municipality</label>
                     <div className="grid grid-cols-2 gap-3">
