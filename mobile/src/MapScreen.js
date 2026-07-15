@@ -4,6 +4,21 @@ import WebView from 'react-native-webview';
 import Geolocation from '@react-native-community/geolocation';
 import { supabase } from './supabase';
 
+const getDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371e3; // metres
+  const φ1 = lat1 * Math.PI/180;
+  const φ2 = lat2 * Math.PI/180;
+  const Δφ = (lat2-lat1) * Math.PI/180;
+  const Δλ = (lon2-lon1) * Math.PI/180;
+
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  return R * c; // in metres
+};
+
 export default function MapScreen({ account, onLogout }) {
   const [employees, setEmployees] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -16,6 +31,7 @@ export default function MapScreen({ account, onLogout }) {
   const [isCardExpanded, setIsCardExpanded] = useState(false);
   const [routeDistance, setRouteDistance] = useState(null);
   const webviewRef = useRef(null);
+  const lastLocRef = useRef(null);
   
   const selectedSpvrName = supervisorsList.find(s => s.id === selectedSupervisorId)?.name || 'Select Supervisor';
 
@@ -72,7 +88,7 @@ export default function MapScreen({ account, onLogout }) {
 
   useEffect(() => {
     if (webviewRef.current && location) {
-      webviewRef.current.postMessage(JSON.stringify({ type: 'update_location', lat: location.latitude, lng: location.longitude }));
+      webviewRef.current.postMessage(JSON.stringify({ type: 'update_location', lat: location.latitude, lng: location.longitude, heading: location.heading || 0 }));
     }
   }, [location]);
 
@@ -145,8 +161,10 @@ export default function MapScreen({ account, onLogout }) {
     Geolocation.getCurrentPosition(
       position => {
         const { latitude, longitude, heading, speed } = position.coords;
-        setMyDeviceLocation({ latitude, longitude });
-        updateLocationInDB(latitude, longitude, heading, speed);
+        const finalSpeed = speed && speed > 0 ? speed : 0;
+        lastLocRef.current = { latitude, longitude, time: Date.now() };
+        setMyDeviceLocation({ latitude, longitude, heading });
+        updateLocationInDB(latitude, longitude, heading, finalSpeed);
       },
       error => console.warn('Initial location error:', error),
       { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
@@ -155,16 +173,35 @@ export default function MapScreen({ account, onLogout }) {
     return Geolocation.watchPosition(
       position => {
         const { latitude, longitude, heading, speed } = position.coords;
-        setMyDeviceLocation({ latitude, longitude });
-        updateLocationInDB(latitude, longitude, heading, speed);
+        let finalSpeed = speed && speed > 0 ? speed : 0;
+        
+        if (lastLocRef.current) {
+          const prev = lastLocRef.current;
+          const timeSec = (Date.now() - prev.time) / 1000;
+          if (timeSec > 0) {
+            const dist = getDistance(prev.latitude, prev.longitude, latitude, longitude);
+            if (finalSpeed === 0) {
+              finalSpeed = dist / timeSec;
+            }
+          }
+        }
+        lastLocRef.current = { latitude, longitude, time: Date.now() };
+        if (!Number.isFinite(finalSpeed)) finalSpeed = 0;
+        if (finalSpeed > 40) finalSpeed = 40; // cap at 144km/h to prevent GPS jitter bugs
+        
+        setMyDeviceLocation({ latitude, longitude, heading });
+        updateLocationInDB(latitude, longitude, heading, finalSpeed);
       },
       error => console.error('Geolocation Error:', error),
-      { enableHighAccuracy: true, distanceFilter: 1, interval: 2000, fastestInterval: 1000 }
+      { enableHighAccuracy: true, distanceFilter: 0, interval: 1000, fastestInterval: 500 }
     );
   };
 
   const updateLocationInDB = async (lat, lng, heading, speed) => {
     try {
+      const s = Number.isFinite(speed) ? speed : 0;
+      const h = Number.isFinite(heading) ? heading : 0;
+
       if (account.type === 'supervisor') {
         const { error } = await supabase
           .from('supervisor_locations')
@@ -172,8 +209,8 @@ export default function MapScreen({ account, onLogout }) {
             supervisor_id: account.id,
             latitude: lat,
             longitude: lng,
-            heading: heading || 0,
-            speed: speed || 0,
+            heading: h,
+            speed: s,
             last_updated: new Date().toISOString()
           }, { onConflict: 'supervisor_id' });
         if (error) console.error('Supabase update error:', error.message);
@@ -184,8 +221,8 @@ export default function MapScreen({ account, onLogout }) {
             user_id: account.id,
             latitude: lat,
             longitude: lng,
-            heading: heading || 0,
-            speed: speed || 0,
+            heading: h,
+            speed: s,
             last_updated: new Date().toISOString()
           }, { onConflict: 'user_id' });
         if (error) console.error('Supabase update error:', error.message);
@@ -254,17 +291,23 @@ export default function MapScreen({ account, onLogout }) {
         let myLocationMarker = null;
         let routingControl = null;
 
-        const spvrIcon = L.divIcon({
-          className: 'bg-transparent border-0',
-          html: \`
-            <div style="position:relative; width:24px; height:24px; display:flex; align-items:center; justify-content:center;">
-              <div style="position:absolute; inset:0; background-color:#3b82f6; border-radius:50%; animation:ping 1s cubic-bezier(0, 0, 0.2, 1) infinite; opacity:0.75;"></div>
-              <div style="position:relative; width:12px; height:12px; background-color:#3b82f6; border-radius:50%; border:2px solid white;"></div>
-            </div>
-          \`,
-          iconSize: [24, 24],
-          iconAnchor: [12, 12]
-        });
+        const getSpvrIcon = (heading = 0) => {
+          return L.divIcon({
+            className: 'bg-transparent border-0',
+            html: \`
+              <div style="position:relative; width:36px; height:36px; display:flex; align-items:center; justify-content:center;">
+                <div style="position:absolute; inset:0; background-color:#3b82f6; border-radius:50%; animation:ping 1s cubic-bezier(0, 0, 0.2, 1) infinite; opacity:0.4;"></div>
+                <div style="position:relative; width:24px; height:24px; background-color:#3b82f6; border-radius:50%; border:3px solid white; display:flex; align-items:center; justify-content:center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+                  <svg viewBox="0 0 24 24" width="12" height="12" xmlns="http://www.w3.org/2000/svg" style="transform: rotate(\${heading}deg); transition: transform 0.3s ease;">
+                    <path d="M12 2L4 20l8-4 8 4-8-18z" fill="white" />
+                  </svg>
+                </div>
+              </div>
+            \`,
+            iconSize: [36, 36],
+            iconAnchor: [18, 18]
+          });
+        };
 
         const style = document.createElement('style');
         style.innerHTML = \`
@@ -440,10 +483,12 @@ export default function MapScreen({ account, onLogout }) {
             if (data.type === 'update_location') {
                const lat = parseFloat(data.lat);
                const lng = parseFloat(data.lng);
+               const heading = parseFloat(data.heading || 0);
                if (myLocationMarker) {
                  myLocationMarker.setLatLng([lat, lng]);
+                 myLocationMarker.setIcon(getSpvrIcon(heading));
                } else {
-                 myLocationMarker = L.marker([lat, lng], { icon: spvrIcon, zIndexOffset: 1000 }).addTo(map);
+                 myLocationMarker = L.marker([lat, lng], { icon: getSpvrIcon(heading), zIndexOffset: 1000 }).addTo(map);
                }
                map.panTo([lat, lng]);
 
@@ -505,7 +550,7 @@ export default function MapScreen({ account, onLogout }) {
              webviewRef.current.postMessage(JSON.stringify({ type: 'update_employees', employees: filteredEmployees, clear: true }));
            }
            if (location) {
-             webviewRef.current.postMessage(JSON.stringify({ type: 'update_location', lat: location.latitude, lng: location.longitude }));
+             webviewRef.current.postMessage(JSON.stringify({ type: 'update_location', lat: location.latitude, lng: location.longitude, heading: location.heading || 0 }));
            }
         }}
       />

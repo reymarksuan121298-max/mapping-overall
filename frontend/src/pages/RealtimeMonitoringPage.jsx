@@ -7,32 +7,29 @@ import { Activity, MapPin, Navigation, Car, AlertTriangle, Users, Clock } from '
 import { formatDistanceToNow } from 'date-fns';
 
 // Custom Marker for Supervisors
-const iconCache = {};
-const createSupervisorIcon = (color) => {
+const createSupervisorIcon = (color, heading = 0) => {
   const safeColor = color || '#3b82f6';
-  if (iconCache[safeColor]) return iconCache[safeColor];
 
   const svgIcon = `
-    <svg viewBox="0 0 24 36" width="24" height="36" xmlns="http://www.w3.org/2000/svg">
-      <path d="M12 0C5.373 0 0 5.373 0 12c0 9 12 24 12 24s12-15 12-24c0-6.627-5.373-12-12-12z" fill="${safeColor}" stroke="white" stroke-width="1.5" />
-      <circle cx="12" cy="11" r="5" fill="#0f172a" />
+    <svg viewBox="0 0 24 24" width="12" height="12" xmlns="http://www.w3.org/2000/svg" style="transform: rotate(${heading}deg); transition: transform 0.3s ease;">
+      <path d="M12 2L4 20l8-4 8 4-8-18z" fill="white" />
     </svg>
   `;
 
-  iconCache[safeColor] = new L.DivIcon({
+  return new L.DivIcon({
     className: 'custom-div-icon bg-transparent border-0',
     html: `
-      <div class="relative flex items-center justify-center">
-        <div class="absolute -inset-2 rounded-full animate-ping opacity-40" style="background-color: ${safeColor}"></div>
-        <div>${svgIcon}</div>
+      <div class="relative flex items-center justify-center" style="width: 36px; height: 36px;">
+        <div class="absolute inset-0 rounded-full animate-ping opacity-40" style="background-color: ${safeColor}; animation-duration: 1s;"></div>
+        <div class="relative flex items-center justify-center rounded-full border-[3px] border-white shadow-lg" style="background-color: ${safeColor}; width: 24px; height: 24px;">
+          ${svgIcon}
+        </div>
       </div>
     `,
-    iconSize: [24, 36],
-    iconAnchor: [12, 36],
-    popupAnchor: [0, -36]
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+    popupAnchor: [0, -18]
   });
-  
-  return iconCache[safeColor];
 };
 
 const employeeIconCache = {};
@@ -123,10 +120,22 @@ export default function RealtimeMonitoringPage({ user }) {
   };
 
   useEffect(() => {
-    fetchData();
-    // Poll every 3 seconds for real-time smoothness
-    const interval = setInterval(fetchData, 3000);
-    return () => clearInterval(interval);
+    let isMounted = true;
+    let timeoutId;
+
+    const pollData = async () => {
+      await fetchData();
+      if (isMounted) {
+        timeoutId = setTimeout(pollData, 1000);
+      }
+    };
+
+    pollData();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
   }, [user]);
 
   const handleSupervisorSelect = (loc) => {
@@ -135,20 +144,24 @@ export default function RealtimeMonitoringPage({ user }) {
   };
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex relative overflow-hidden">
       {/* Side Panel */}
-      <div className="w-96 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-2xl relative">
-        <div className="p-6 border-b border-slate-800/80 bg-slate-900/50 backdrop-blur-md sticky top-0">
+      <div className="bg-slate-900 flex flex-col z-20 shadow-2xl relative h-full flex-shrink-0 border-r border-slate-800 w-full sm:w-80 lg:w-96">
+        <div className="p-4 sm:p-6 border-b border-slate-800/80 bg-slate-900/50 backdrop-blur-md sticky top-0">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-[0_0_15px_rgba(99,102,241,0.3)]">
               <Activity size={20} />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white tracking-tight">Live Tracking</h1>
-              <p className="text-sm text-indigo-400 font-medium">Field Supervisors</p>
+              <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight">Live Tracking</h1>
+              <p className="text-xs sm:text-sm text-indigo-400 font-medium">Field Supervisors</p>
             </div>
           </div>
-          <p className="text-xs text-slate-400 mt-2 flex items-center gap-2">
+          <p 
+            className="text-[10px] sm:text-xs text-slate-400 mt-2 flex items-center gap-2 cursor-pointer hover:text-white transition-colors"
+            onClick={() => setSelectedSupervisor('all')}
+            title="Click to view all employees"
+          >
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -198,8 +211,8 @@ export default function RealtimeMonitoringPage({ user }) {
                         </span>
                       </div>
                       <div>
-                        <h3 className="text-sm font-bold text-slate-200">{sup.name}</h3>
-                        <p className="text-xs text-slate-400">{sup.franchises?.name}</p>
+                        <h3 className="text-sm sm:text-base font-bold text-slate-200">{sup.name}</h3>
+                        <p className="text-[10px] sm:text-xs text-slate-400">{sup.franchises?.name}</p>
                       </div>
                     </div>
                     {isStale && (
@@ -211,27 +224,27 @@ export default function RealtimeMonitoringPage({ user }) {
                   </div>
                   
                   <div className="grid grid-cols-2 gap-2 mt-2">
-                    <div className="bg-slate-900/50 rounded-lg p-2 flex items-center gap-2">
-                      <Car size={14} className="text-indigo-400" />
-                      <div>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Speed</p>
-                        <p className="text-xs text-slate-300 font-medium">
-                          {(loc.speed || 0).toFixed(1)} <span className="text-[10px] text-slate-500">m/s</span>
+                    <div className="bg-slate-900/50 rounded-lg p-2 flex items-center gap-1 sm:gap-2">
+                      <Car size={14} className="text-indigo-400 flex-shrink-0" />
+                      <div className="overflow-hidden min-w-0">
+                        <p className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider truncate">Speed</p>
+                        <p className="text-[10px] sm:text-xs text-slate-300 font-medium truncate">
+                          {(loc.speed || 0).toFixed(1)} <span className="text-[8px] sm:text-[10px] text-slate-500">m/s</span>
                         </p>
                       </div>
                     </div>
-                    <div className="bg-slate-900/50 rounded-lg p-2 flex items-center gap-2">
-                      <Navigation size={14} className="text-indigo-400" style={{ transform: `rotate(${loc.heading || 0}deg)` }} />
-                      <div>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Heading</p>
-                        <p className="text-xs text-slate-300 font-medium">
+                    <div className="bg-slate-900/50 rounded-lg p-2 flex items-center gap-1 sm:gap-2">
+                      <Navigation size={14} className="text-indigo-400 flex-shrink-0" style={{ transform: `rotate(${loc.heading || 0}deg)` }} />
+                      <div className="overflow-hidden min-w-0">
+                        <p className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider truncate">Heading</p>
+                        <p className="text-[10px] sm:text-xs text-slate-300 font-medium truncate">
                           {Math.round(loc.heading || 0)}&deg;
                         </p>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="mt-3 pt-3 border-t border-slate-700/50 flex justify-between items-center text-[10px]">
+                  <div className="mt-3 pt-3 border-t border-slate-700/50 flex justify-between items-center text-[8px] sm:text-[10px]">
                     <span className="text-slate-500 flex items-center gap-1">
                       <Clock size={10} /> 
                       Last signal
@@ -269,37 +282,37 @@ export default function RealtimeMonitoringPage({ user }) {
               <Marker
                 key={`sup-${loc.id}`}
                 position={[loc.latitude, loc.longitude]}
-                icon={createSupervisorIcon(loc.supervisors.color)}
+                icon={createSupervisorIcon(loc.supervisors.color, loc.heading)}
               >
                 <Popup className="custom-popup">
-                  <div className="font-sans">
-                    <h3 className="font-bold text-slate-800">{loc.supervisors.name}</h3>
-                    <p className="text-sm text-slate-500 mb-1">{loc.supervisors.franchises?.name}</p>
-                    <p className="text-xs text-slate-600">Speed: {(loc.speed || 0).toFixed(1)} m/s</p>
+                  <div className="font-sans p-1">
+                    <h3 className="font-bold text-slate-800 text-sm sm:text-base">{loc.supervisors.name}</h3>
+                    <p className="text-xs sm:text-sm text-slate-500 mb-1">{loc.supervisors.franchises?.name}</p>
+                    <p className="text-[10px] sm:text-xs text-slate-600">Speed: {(loc.speed || 0).toFixed(1)} m/s</p>
                   </div>
                 </Popup>
               </Marker>
             );
           })}
 
-          {selectedSupervisor && employees
-            .filter(e => e.supervisor_id === selectedSupervisor)
-            .map(emp => (
+          {(selectedSupervisor === 'all' ? employees : employees.filter(e => e.supervisor_id === selectedSupervisor))
+            .map(emp => {
+              const supColor = locations.find(l => l.supervisor_id === emp.supervisor_id)?.supervisors?.color || '#3b82f6';
+              return (
               <Marker
                 key={`emp-${emp.id}`}
                 position={[emp.latitude, emp.longitude]}
-                icon={createEmployeeIcon(locations.find(l => l.supervisor_id === selectedSupervisor)?.supervisors?.color || '#3b82f6')}
+                icon={createEmployeeIcon(supColor)}
               >
                 <Popup className="custom-popup">
-                  <div className="font-sans">
-                    <h3 className="font-bold text-slate-800">{emp.full_name}</h3>
-                    <p className="text-sm text-slate-500 mb-1">{emp.employee_id} • {emp.role}</p>
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Assigned Employee</span>
+                  <div className="font-sans p-1">
+                    <h3 className="font-bold text-slate-800 text-sm sm:text-base">{emp.full_name}</h3>
+                    <p className="text-xs sm:text-sm text-slate-500 mb-1">{emp.employee_id} • {emp.role}</p>
+                    <span className="text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 inline-block mt-1">Assigned Employee</span>
                   </div>
                 </Popup>
               </Marker>
-            ))
-          }
+            )})}
         </MapContainer>
         
         {/* Map Overlay Controls could go here */}
