@@ -13,6 +13,7 @@ export default function EmployeesPage({ user }) {
   
   const [selectedFranchise, setSelectedFranchise] = useState(user?.franchise_id ? user.franchise_id.toString() : 'all');
   const [selectedArea, setSelectedArea] = useState('all');
+  const [selectedSupervisor, setSelectedSupervisor] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
 
@@ -123,9 +124,10 @@ export default function EmployeesPage({ user }) {
     const matchesSearch = emp.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || emp.employee_id?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFranchise = selectedFranchise === 'all' || emp.franchise_id?.toString() === selectedFranchise;
     const matchesArea = selectedArea === 'all' || emp.area_id?.toString() === selectedArea;
+    const matchesSupervisor = selectedSupervisor === 'all' || emp.supervisor_id?.toString() === selectedSupervisor;
     const matchesStatus = selectedStatus === 'all' || emp.status?.toLowerCase() === selectedStatus.toLowerCase();
     
-    return matchesSearch && matchesFranchise && matchesArea && matchesStatus;
+    return matchesSearch && matchesFranchise && matchesArea && matchesSupervisor && matchesStatus;
   });
 
   const openAddModal = () => {
@@ -293,6 +295,22 @@ export default function EmployeesPage({ user }) {
                       <option value="all">All Areas</option>
                       {areas.map(a => (
                         <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Supervisor</label>
+                    <select 
+                      className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none p-2 cursor-pointer"
+                      value={selectedSupervisor}
+                      onChange={(e) => setSelectedSupervisor(e.target.value)}
+                    >
+                      <option value="all">All Supervisors</option>
+                      {supervisors
+                        .filter(s => selectedFranchise === 'all' || s.franchise_id?.toString() === selectedFranchise)
+                        .map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>
                   </div>
