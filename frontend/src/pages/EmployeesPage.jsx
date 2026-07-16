@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
 import { Users, Search, Filter, Plus, Edit2, Trash2, X, Upload, Store, MapPin } from 'lucide-react';
 
@@ -81,34 +81,31 @@ export default function EmployeesPage({ user }) {
   const fetchEmployees = async () => {
     setLoading(true);
     try {
-      const { data: franchiseData } = await supabase.from('franchises').select('*');
-      if (franchiseData) setFranchises(franchiseData);
-
-      const { data: areaData } = await supabase.from('areas').select('*');
-      if (areaData) setAreas(areaData);
-
-      let spvrData = [];
-      const { data: spvrRes } = await supabase.from('supervisors').select('*');
-      if (spvrRes) {
-        spvrData = user?.role === 'franchise_admin' 
-          ? spvrRes.filter(s => s.franchise_id === user.franchise_id)
-          : spvrRes;
-        setSupervisors(spvrData);
-      }
-
-      const { data, error } = await supabase
-        .from('employees')
-        .select(`
+      const [franchiseRes, areaRes, spvrRes, empRes] = await Promise.all([
+        supabase.from('franchises').select('*'),
+        supabase.from('areas').select('*'),
+        supabase.from('supervisors').select('*'),
+        supabase.from('employees').select(`
           id, employee_id, full_name, role, status, franchise_id, area_id, supervisor_id,
           franchises (name),
           areas (name),
           supervisors (name, color)
-        `)
-        .order('full_name');
-        
-      if (error) throw error;
+        `).order('full_name')
+      ]);
+
+      if (franchiseRes.data) setFranchises(franchiseRes.data);
+      if (areaRes.data) setAreas(areaRes.data);
+
+      if (spvrRes.data) {
+        const spvrData = user?.role === 'franchise_admin' 
+          ? spvrRes.data.filter(s => s.franchise_id === user.franchise_id)
+          : spvrRes.data;
+        setSupervisors(spvrData);
+      }
+
+      if (empRes.error) throw empRes.error;
       
-      let empData = data || [];
+      let empData = empRes.data || [];
       if (user?.role === 'franchise_admin') {
         empData = empData.filter(e => e.franchise_id === user.franchise_id);
       }
@@ -120,15 +117,17 @@ export default function EmployeesPage({ user }) {
     }
   };
 
-  const filteredEmployees = employees.filter(emp => {
-    const matchesSearch = emp.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || emp.employee_id?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFranchise = selectedFranchise === 'all' || emp.franchise_id?.toString() === selectedFranchise;
-    const matchesArea = selectedArea === 'all' || emp.area_id?.toString() === selectedArea;
-    const matchesSupervisor = selectedSupervisor === 'all' || emp.supervisor_id?.toString() === selectedSupervisor;
-    const matchesStatus = selectedStatus === 'all' || emp.status?.toLowerCase() === selectedStatus.toLowerCase();
-    
-    return matchesSearch && matchesFranchise && matchesArea && matchesSupervisor && matchesStatus;
-  });
+  const filteredEmployees = useMemo(() => {
+    return employees.filter(emp => {
+      const matchesSearch = emp.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || emp.employee_id?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesFranchise = selectedFranchise === 'all' || emp.franchise_id?.toString() === selectedFranchise;
+      const matchesArea = selectedArea === 'all' || emp.area_id?.toString() === selectedArea;
+      const matchesSupervisor = selectedSupervisor === 'all' || emp.supervisor_id?.toString() === selectedSupervisor;
+      const matchesStatus = selectedStatus === 'all' || emp.status?.toLowerCase() === selectedStatus.toLowerCase();
+      
+      return matchesSearch && matchesFranchise && matchesArea && matchesSupervisor && matchesStatus;
+    });
+  }, [employees, searchTerm, selectedFranchise, selectedArea, selectedSupervisor, selectedStatus]);
 
   const openAddModal = () => {
     setModalMode('add');
@@ -492,7 +491,7 @@ export default function EmployeesPage({ user }) {
                       >
                         <option value="">Select Supervisor</option>
                         {supervisors
-                          .filter(s => !formData.franchise_id || s.franchise_id?.toString() === formData.franchise_id)
+                          .filter(s => !formData.franchise_id || s.franchise_id?.toString() === formData.franchise_id?.toString())
                           .map(s => (
                           <option key={s.id} value={s.id}>{s.name}</option>
                         ))}

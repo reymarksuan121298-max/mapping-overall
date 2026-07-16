@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Activity, MapPin, Navigation, Car, AlertTriangle, Users, Clock } from 'lucide-react';
+import { Activity, MapPin, Navigation, Car, AlertTriangle, Users, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 // Custom Marker for Supervisors
@@ -59,14 +59,24 @@ const createEmployeeIcon = (color) => {
   return employeeIconCache[safeColor];
 };
 
-// Component to handle dynamic panning
-function MapController({ centerPos }) {
+// Component to handle dynamic panning and resizing
+function MapController({ centerPos, isSidebarOpen }) {
   const map = useMap();
+  
   useEffect(() => {
     if (centerPos) {
       map.flyTo(centerPos, 15, { animate: true, duration: 1.5 });
     }
   }, [centerPos, map]);
+
+  useEffect(() => {
+    // Invalidate map size after sidebar transition finishes to prevent gray areas
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [isSidebarOpen, map]);
+
   return null;
 }
 
@@ -75,6 +85,7 @@ export default function RealtimeMonitoringPage({ user }) {
   const [selectedSupervisor, setSelectedSupervisor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [mapCenter, setMapCenter] = useState([8.242, 124.262]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const [employees, setEmployees] = useState([]);
 
@@ -146,8 +157,9 @@ export default function RealtimeMonitoringPage({ user }) {
   return (
     <div className="h-full flex relative overflow-hidden">
       {/* Side Panel */}
-      <div className="bg-slate-900 flex flex-col z-20 shadow-2xl relative h-full flex-shrink-0 border-r border-slate-800 w-full sm:w-80 lg:w-96">
-        <div className="p-4 sm:p-6 border-b border-slate-800/80 bg-slate-900/50 backdrop-blur-md sticky top-0">
+      <div className={`bg-slate-900 z-20 shadow-2xl relative h-full flex-shrink-0 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-full sm:w-80 lg:w-96 border-r border-slate-800' : 'w-0 border-0 overflow-hidden'}`}>
+        <div className="flex flex-col h-full w-[100vw] sm:w-80 lg:w-96">
+          <div className="p-4 sm:p-6 border-b border-slate-800/80 bg-slate-900/50 backdrop-blur-md sticky top-0">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-[0_0_15px_rgba(99,102,241,0.3)]">
               <Activity size={20} />
@@ -258,6 +270,7 @@ export default function RealtimeMonitoringPage({ user }) {
             })
           )}
         </div>
+        </div>
       </div>
 
       {/* Map Area */}
@@ -274,7 +287,7 @@ export default function RealtimeMonitoringPage({ user }) {
             subdomains={['mt0', 'mt1', 'mt2', 'mt3']}
             attribution="Map data &copy; Google"
           />
-          <MapController centerPos={mapCenter} />
+          <MapController centerPos={mapCenter} isSidebarOpen={isSidebarOpen} />
           
           {locations.map(loc => {
             if (!loc.supervisors) return null;
@@ -316,6 +329,12 @@ export default function RealtimeMonitoringPage({ user }) {
         </MapContainer>
         
         {/* Map Overlay Controls could go here */}
+        <button 
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className="absolute top-6 left-0 z-[1000] bg-slate-900/80 backdrop-blur-md text-slate-300 hover:text-white p-2 rounded-r-xl border border-l-0 border-slate-700 shadow-[0_4px_20px_rgba(0,0,0,0.5)] hover:bg-slate-800 transition-all"
+        >
+          {isSidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+        </button>
       </div>
     </div>
   );
