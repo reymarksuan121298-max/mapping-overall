@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import KioskMap from '../components/KioskMap';
-import { MapPin, Users, Activity, Filter, Layers, Map as MapIcon, Shield, X, Search, ChevronDown, UserPlus, Save } from 'lucide-react';
+import { MapPin, Users, Activity, Filter, Layers, Map as MapIcon, Shield, X, Search, ChevronDown, UserPlus, Save, Upload, Store } from 'lucide-react';
 
 export default function MapDashboard({ user }) {
   const [employees, setEmployees] = useState([]);
@@ -25,7 +25,16 @@ export default function MapDashboard({ user }) {
     area_id: '',
     municipality_id: '',
     address: '',
-    status: 'Active'
+    status: 'Active',
+    photo_url: '',
+    id_photo_url: '',
+    coordinate_screenshot_url: ''
+  });
+
+  const [uploading, setUploading] = useState({
+    photo_url: false,
+    id_photo_url: false,
+    coordinate_screenshot_url: false
   });
 
   // Filters
@@ -186,6 +195,42 @@ export default function MapDashboard({ user }) {
     }
   };
 
+  const handleFileUpload = async (event, fieldName) => {
+    try {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      setUploading(prev => ({ ...prev, [fieldName]: true }));
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${employeeFormData.employee_id || 'new'}-${fieldName}-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('employees')
+        .upload(filePath, file, { cacheControl: '3600', upsert: false });
+
+      if (uploadError) {
+        if (uploadError.message.includes('Bucket not found') || uploadError.message.includes('not found')) {
+          throw new Error('Storage bucket "employees" does not exist. Please create a public bucket named "employees" in Supabase Storage.');
+        }
+        throw uploadError;
+      }
+
+      const { data } = supabase.storage
+        .from('employees')
+        .getPublicUrl(filePath);
+
+      setEmployeeFormData(prev => ({ ...prev, [fieldName]: data.publicUrl }));
+      
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert(error.message || 'Error uploading image.');
+    } finally {
+      setUploading(prev => ({ ...prev, [fieldName]: false }));
+    }
+  };
+
   const handleSaveEmployee = async (e) => {
     e.preventDefault();
     if (!selectedLocation) return;
@@ -199,7 +244,10 @@ export default function MapDashboard({ user }) {
         supervisor_id: employeeFormData.supervisor_id || null,
         franchise_id: employeeFormData.franchise_id || null,
         area_id: employeeFormData.area_id || null,
-        municipality_id: employeeFormData.municipality_id || null
+        municipality_id: employeeFormData.municipality_id || null,
+        photo_url: employeeFormData.photo_url || null,
+        id_photo_url: employeeFormData.id_photo_url || null,
+        coordinate_screenshot_url: employeeFormData.coordinate_screenshot_url || null
       };
 
       if (editingEmployeeId) {
@@ -274,7 +322,10 @@ export default function MapDashboard({ user }) {
       area_id: '',
       municipality_id: '',
       address: '',
-      status: 'Active'
+      status: 'Active',
+      photo_url: '',
+      id_photo_url: '',
+      coordinate_screenshot_url: ''
     });
     setIsAddingEmployee(false);
     setIsEmployeeModalOpen(true);
@@ -292,7 +343,10 @@ export default function MapDashboard({ user }) {
       area_id: kiosk.area_id || '',
       municipality_id: kiosk.municipality_id || '',
       address: kiosk.address || '',
-      status: kiosk.status || 'Active'
+      status: kiosk.status || 'Active',
+      photo_url: kiosk.photo_url || '',
+      id_photo_url: kiosk.id_photo_url || '',
+      coordinate_screenshot_url: kiosk.coordinate_screenshot_url || ''
     });
     setIsEmployeeModalOpen(true);
   }, []);
@@ -649,6 +703,72 @@ export default function MapDashboard({ user }) {
                     <div className="flex gap-4 font-mono text-sm text-emerald-400">
                       <div><span className="text-slate-500 mr-1">LAT:</span>{selectedLocation?.lat.toFixed(6)}</div>
                       <div><span className="text-slate-500 mr-1">LNG:</span>{selectedLocation?.lng.toFixed(6)}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Image Uploads */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 mt-4 border-t border-slate-700/50">
+                {/* 2x2 Picture */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Employee 2x2 Picture</label>
+                  <div className="border border-emerald-500/30 border-dashed bg-emerald-500/5 rounded-xl p-3 flex gap-3 h-[110px]">
+                    <div className="w-[84px] h-[84px] bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      {employeeFormData.photo_url ? (
+                        <img src={employeeFormData.photo_url} alt="2x2" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-2xl font-black text-slate-600">2x2</span>
+                      )}
+                    </div>
+                    <div className="flex flex-col justify-center">
+                      <span className="text-xs font-bold text-slate-300">2x2 Picture</span>
+                      <label className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer mt-2">
+                        {uploading.photo_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
+                        <input type="file" accept="image/*" className="hidden" disabled={uploading.photo_url} onChange={(e) => handleFileUpload(e, 'photo_url')} />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Kiosk Location Image */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Kiosk Location Image</label>
+                  <div className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50">
+                    <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden">
+                      {employeeFormData.id_photo_url ? (
+                        <img src={employeeFormData.id_photo_url} alt="Kiosk" className="w-full h-full object-cover" />
+                      ) : (
+                        <Store size={24} />
+                      )}
+                    </div>
+                    <div className="flex flex-col justify-center">
+                      <span className="text-xs font-bold text-slate-300 mb-2">Kiosk Photo</span>
+                      <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer">
+                        {uploading.id_photo_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
+                        <input type="file" accept="image/*" className="hidden" disabled={uploading.id_photo_url} onChange={(e) => handleFileUpload(e, 'id_photo_url')} />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* GPS Screenshot */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">GPS Screenshot</label>
+                  <div className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50">
+                    <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden">
+                      {employeeFormData.coordinate_screenshot_url ? (
+                        <img src={employeeFormData.coordinate_screenshot_url} alt="GPS" className="w-full h-full object-cover" />
+                      ) : (
+                        <MapPin size={24} />
+                      )}
+                    </div>
+                    <div className="flex flex-col justify-center">
+                      <span className="text-xs font-bold text-slate-300 leading-tight mb-2">GPS<br/>Screenshot</span>
+                      <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer">
+                        {uploading.coordinate_screenshot_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
+                        <input type="file" accept="image/*" className="hidden" disabled={uploading.coordinate_screenshot_url} onChange={(e) => handleFileUpload(e, 'coordinate_screenshot_url')} />
+                      </label>
                     </div>
                   </div>
                 </div>

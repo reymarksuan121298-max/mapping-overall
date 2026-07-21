@@ -62,20 +62,6 @@ export default function DashboardPage({ user }) {
       border: 'border-blue-500/20'
     },
     {
-      title: 'Active Employees',
-      value: stats.active,
-      icon: <UserCheck size={24} className="text-emerald-400" />,
-      bg: 'bg-emerald-500/10',
-      border: 'border-emerald-500/20'
-    },
-    {
-      title: 'Inactive Employees',
-      value: stats.inactive,
-      icon: <UserX size={24} className="text-rose-400" />,
-      bg: 'bg-rose-500/10',
-      border: 'border-rose-500/20'
-    },
-    {
       title: 'With GPS Location',
       value: stats.withGps,
       icon: <MapPin size={24} className="text-amber-400" />,

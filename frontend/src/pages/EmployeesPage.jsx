@@ -33,7 +33,15 @@ export default function EmployeesPage({ user }) {
     allowed_radius: '100',
     address: '',
     latitude: '',
-    longitude: ''
+    longitude: '',
+    photo_url: '',
+    id_photo_url: '',
+    coordinate_screenshot_url: ''
+  });
+  const [uploading, setUploading] = useState({
+    photo_url: false,
+    id_photo_url: false,
+    coordinate_screenshot_url: false
   });
   const [editingId, setEditingId] = useState(null);
 
@@ -87,6 +95,7 @@ export default function EmployeesPage({ user }) {
         supabase.from('supervisors').select('*'),
         supabase.from('employees').select(`
           id, employee_id, full_name, role, status, franchise_id, area_id, supervisor_id,
+          photo_url, id_photo_url, coordinate_screenshot_url,
           franchises (name),
           areas (name),
           supervisors (name, color)
@@ -144,7 +153,10 @@ export default function EmployeesPage({ user }) {
       allowed_radius: '100',
       address: '',
       latitude: '',
-      longitude: ''
+      longitude: '',
+      photo_url: '',
+      id_photo_url: '',
+      coordinate_screenshot_url: ''
     });
     setEditingId(null);
     setIsModalOpen(true);
@@ -165,7 +177,10 @@ export default function EmployeesPage({ user }) {
       allowed_radius: emp.allowed_radius || '100',
       address: emp.address || '',
       latitude: emp.latitude || '',
-      longitude: emp.longitude || ''
+      longitude: emp.longitude || '',
+      photo_url: emp.photo_url || '',
+      id_photo_url: emp.id_photo_url || '',
+      coordinate_screenshot_url: emp.coordinate_screenshot_url || ''
     });
     setEditingId(emp.id);
     setIsModalOpen(true);
@@ -203,6 +218,42 @@ export default function EmployeesPage({ user }) {
     }
   };
 
+  const handleFileUpload = async (event, fieldName) => {
+    try {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      setUploading(prev => ({ ...prev, [fieldName]: true }));
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${formData.employee_id || 'new'}-${fieldName}-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('employees')
+        .upload(filePath, file, { cacheControl: '3600', upsert: false });
+
+      if (uploadError) {
+        if (uploadError.message.includes('Bucket not found') || uploadError.message.includes('not found')) {
+          throw new Error('Storage bucket "employees" does not exist. Please create a public bucket named "employees" in Supabase Storage.');
+        }
+        throw uploadError;
+      }
+
+      const { data } = supabase.storage
+        .from('employees')
+        .getPublicUrl(filePath);
+
+      setFormData(prev => ({ ...prev, [fieldName]: data.publicUrl }));
+      
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert(error.message || 'Error uploading image.');
+    } finally {
+      setUploading(prev => ({ ...prev, [fieldName]: false }));
+    }
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     try {
@@ -213,7 +264,16 @@ export default function EmployeesPage({ user }) {
         status: formData.status,
         franchise_id: formData.franchise_id || null,
         area_id: formData.area_id || null,
-        supervisor_id: formData.supervisor_id || null
+        supervisor_id: formData.supervisor_id || null,
+        photo_url: formData.photo_url || null,
+        id_photo_url: formData.id_photo_url || null,
+        coordinate_screenshot_url: formData.coordinate_screenshot_url || null,
+        latitude: formData.latitude || null,
+        longitude: formData.longitude || null,
+        address: formData.address || null,
+        contact_number: formData.contact_number || null,
+        municipality: formData.municipality || null,
+        allowed_radius: formData.allowed_radius || '100'
       };
 
       if (modalMode === 'add') {
@@ -599,21 +659,26 @@ export default function EmployeesPage({ user }) {
                   </div>
 
                   {/* Image Uploads */}
-                  <div className="grid grid-cols-3 gap-6 pt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
                     
                     {/* 2x2 Picture */}
                     <div>
                       <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Employee 2x2 Picture</label>
                       <div className="border border-emerald-500/30 border-dashed bg-emerald-500/5 rounded-xl p-3 flex gap-3 h-[110px]">
-                        <div className="w-[84px] h-[84px] bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-center flex-shrink-0">
-                          <span className="text-2xl font-black text-slate-600">2x2</span>
+                        <div className="w-[84px] h-[84px] bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
+                          {formData.photo_url ? (
+                            <img src={formData.photo_url} alt="2x2" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-2xl font-black text-slate-600">2x2</span>
+                          )}
                         </div>
                         <div className="flex flex-col justify-center">
                           <span className="text-xs font-bold text-slate-300">2x2 Picture</span>
                           <span className="text-[10px] text-slate-500 mt-0.5 leading-tight mb-2">Upload the employee's 2x2 photo.</span>
-                          <button type="button" className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit">
-                            <Upload size={12} /> Upload
-                          </button>
+                          <label className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer">
+                            {uploading.photo_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
+                            <input type="file" accept="image/*" className="hidden" disabled={uploading.photo_url} onChange={(e) => handleFileUpload(e, 'photo_url')} />
+                          </label>
                         </div>
                       </div>
                     </div>
@@ -622,14 +687,19 @@ export default function EmployeesPage({ user }) {
                     <div>
                       <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Kiosk Location Image</label>
                       <div className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50">
-                        <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500">
-                          <Store size={24} />
+                        <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden">
+                          {formData.id_photo_url ? (
+                            <img src={formData.id_photo_url} alt="Kiosk" className="w-full h-full object-cover" />
+                          ) : (
+                            <Store size={24} />
+                          )}
                         </div>
                         <div className="flex flex-col justify-center">
                           <span className="text-xs font-bold text-slate-300 mb-2">Kiosk Photo</span>
-                          <button type="button" className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit">
-                            <Upload size={12} /> Upload
-                          </button>
+                          <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer">
+                            {uploading.id_photo_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
+                            <input type="file" accept="image/*" className="hidden" disabled={uploading.id_photo_url} onChange={(e) => handleFileUpload(e, 'id_photo_url')} />
+                          </label>
                         </div>
                       </div>
                     </div>
@@ -638,14 +708,19 @@ export default function EmployeesPage({ user }) {
                     <div>
                       <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">GPS Screenshot</label>
                       <div className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50">
-                        <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500">
-                          <MapPin size={24} />
+                        <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden">
+                          {formData.coordinate_screenshot_url ? (
+                            <img src={formData.coordinate_screenshot_url} alt="GPS" className="w-full h-full object-cover" />
+                          ) : (
+                            <MapPin size={24} />
+                          )}
                         </div>
                         <div className="flex flex-col justify-center">
                           <span className="text-xs font-bold text-slate-300 leading-tight mb-2">GPS<br/>Screenshot</span>
-                          <button type="button" className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit">
-                            <Upload size={12} /> Upload
-                          </button>
+                          <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer">
+                            {uploading.coordinate_screenshot_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
+                            <input type="file" accept="image/*" className="hidden" disabled={uploading.coordinate_screenshot_url} onChange={(e) => handleFileUpload(e, 'coordinate_screenshot_url')} />
+                          </label>
                         </div>
                       </div>
                     </div>
