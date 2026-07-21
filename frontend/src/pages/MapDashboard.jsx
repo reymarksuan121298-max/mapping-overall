@@ -351,6 +351,18 @@ export default function MapDashboard({ user }) {
     setIsEmployeeModalOpen(true);
   }, []);
 
+  const handleDeleteEmployee = async (kiosk) => {
+    if (!window.confirm(`Are you sure you want to delete ${kiosk.full_name}?`)) return;
+    try {
+      const { error } = await supabase.from('employees').delete().eq('id', kiosk.id);
+      if (error) throw error;
+      fetchData(); // Refresh data
+    } catch (err) {
+      console.error('Error deleting employee:', err.message);
+      alert('Failed to delete employee.');
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col relative h-full w-full bg-slate-900">
       
@@ -370,6 +382,7 @@ export default function MapDashboard({ user }) {
           isAddingEmployee={isAddingEmployee} 
           onLocationSelected={handleLocationSelected}
           onEditEmployee={handleEditEmployee}
+          onDeleteEmployee={handleDeleteEmployee}
         />
       </div>
 

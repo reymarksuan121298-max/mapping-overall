@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { User, MapPin, Layers, Shield, Clock } from 'lucide-react';
+import { User, MapPin, Layers, Shield, Clock, Trash2 } from 'lucide-react';
 
 // Fix for default marker icons
 delete L.Icon.Default.prototype._getIconUrl;
@@ -100,7 +100,7 @@ const MAP_LAYERS = {
   }
 };
 
-const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLocationSelected, isFiltered, onEditEmployee, supervisorLocations = [] }) {
+const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLocationSelected, isFiltered, onEditEmployee, onDeleteEmployee, supervisorLocations = [] }) {
   const [activeLayer, setActiveLayer] = useState('street');
   const [isLayerMenuOpen, setIsLayerMenuOpen] = useState(false);
 
@@ -146,14 +146,25 @@ const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLoca
                     }`}>
                     {kiosk.status || 'Unknown'}
                   </span>
-                  {onEditEmployee && (
-                    <button 
-                      onClick={() => onEditEmployee(kiosk)} 
-                      className="text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-300 transition-colors"
-                    >
-                      Edit Data
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {onEditEmployee && (
+                      <button 
+                        onClick={() => onEditEmployee(kiosk)} 
+                        className="text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-300 transition-colors"
+                      >
+                        Edit Data
+                      </button>
+                    )}
+                    {onDeleteEmployee && (
+                      <button 
+                        onClick={() => onDeleteEmployee(kiosk)} 
+                        className="text-rose-400 hover:text-rose-300 transition-colors bg-rose-500/10 p-1.5 rounded-lg border border-rose-500/20"
+                        title="Delete Employee"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -162,9 +173,9 @@ const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLoca
                 {/* Supervisor */}
                 <div className="bg-slate-900/50 rounded-xl p-3.5 border border-slate-700/50 hover:border-slate-600 transition-colors">
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Supervisor</p>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: spvrColor, boxShadow: `0 0 10px ${spvrColor}` }}></div>
-                    <p className="text-sm font-bold text-slate-200 truncate" title={kiosk.supervisors?.name}>
+                  <div className="flex items-start gap-2 mt-0.5">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1" style={{ backgroundColor: spvrColor, boxShadow: `0 0 10px ${spvrColor}` }}></div>
+                    <p className="text-sm font-bold text-slate-200 leading-tight" title={kiosk.supervisors?.name}>
                       {kiosk.supervisors?.name || 'Unassigned'}
                     </p>
                   </div>
