@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './pages/Layout';
+import DashboardPage from './pages/DashboardPage';
 import MapDashboard from './pages/MapDashboard';
 import EmployeesPage from './pages/EmployeesPage';
 import SupervisorsPage from './pages/SupervisorsPage';
@@ -31,7 +32,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Layout user={user} onLogout={() => { localStorage.removeItem('kiosk_user'); setUser(null); }} />}>
-          <Route index element={<Navigate to="/map" replace />} />
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardPage user={user} />} />
           <Route path="map" element={<MapDashboard user={user} />} />
           <Route path="employees" element={<EmployeesPage user={user} />} />
           <Route path="supervisors" element={<SupervisorsPage user={user} />} />

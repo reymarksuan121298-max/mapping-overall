@@ -4,6 +4,7 @@ import { Map, Users, UserCog, Clock, Home, Activity, Building2, MapPin, LandPlot
 
 export default function Sidebar({ user, onLogout, setIsSidebarOpen }) {
   let navItems = [
+    { name: 'Dashboard', path: '/dashboard', icon: <Home size={18} /> },
     { name: 'Live Map', path: '/map', icon: <Map size={18} /> },
     { name: 'Live Tracking', path: '/realtime', icon: <Activity size={18} /> },
     { name: 'Employees', path: '/employees', icon: <Users size={18} /> },
