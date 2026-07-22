@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { MapPin, Search, Filter, Plus, Edit2, Trash2, X } from 'lucide-react';
+import AlertModal from '../components/AlertModal';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function AreasPage() {
   const [areas, setAreas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [alertState, setAlertState] = useState({ isOpen: false, message: '', type: 'error' });
+  const [confirmState, setConfirmState] = useState({ isOpen: false, message: '', onConfirm: null });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
@@ -60,16 +64,23 @@ export default function AreasPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this area? All linked data may be affected.')) return;
-    try {
-      const { error } = await supabase.from('areas').delete().eq('id', id);
-      if (error) throw error;
-      fetchAreas();
-    } catch (err) {
-      console.error('Error deleting area:', err.message);
-      alert('Failed to delete area.');
-    }
+  const handleDelete = (id) => {
+    setConfirmState({
+      isOpen: true,
+      message: 'Are you sure you want to delete this area? All linked data may be affected.',
+      onConfirm: async () => {
+        setConfirmState(prev => ({ ...prev, isOpen: false }));
+        try {
+          const { error } = await supabase.from('areas').delete().eq('id', id);
+          if (error) throw error;
+          setAlertState({ isOpen: true, message: 'Successfully deleted area!', type: 'success' });
+          fetchAreas();
+        } catch (err) {
+          console.error('Error deleting area:', err.message);
+          setAlertState({ isOpen: true, message: 'Failed to delete area.', type: 'error' });
+        }
+      }
+    });
   };
 
   const handleSave = async (e) => {
@@ -82,15 +93,21 @@ export default function AreasPage() {
       if (modalMode === 'add') {
         const { error } = await supabase.from('areas').insert([payload]);
         if (error) throw error;
+        setAlertState({ isOpen: true, message: 'Successfully added area!', type: 'success' });
       } else {
         const { error } = await supabase.from('areas').update(payload).eq('id', editingId);
         if (error) throw error;
+        setAlertState({ isOpen: true, message: 'Successfully updated area!', type: 'success' });
       }
       setIsModalOpen(false);
       fetchAreas();
     } catch (err) {
       console.error('Error saving area:', err.message);
-      alert('Failed to save area.');
+      let errorMsg = 'Failed to save area.';
+      if (err.code === '23505' || err.message.includes('duplicate key') || err.message.includes('unique constraint')) {
+        errorMsg = 'An area with this name already exists.';
+      }
+      setAlertState({ isOpen: true, message: errorMsg, type: 'error' });
     }
   };
 
@@ -218,6 +235,19 @@ export default function AreasPage() {
             </div>
           </div>
         )}
+
+        <AlertModal 
+          isOpen={alertState.isOpen} 
+          message={alertState.message} 
+          type={alertState.type} 
+          onClose={() => setAlertState({ ...alertState, isOpen: false })} 
+        />
+        <ConfirmModal 
+          isOpen={confirmState.isOpen} 
+          message={confirmState.message} 
+          onConfirm={confirmState.onConfirm} 
+          onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} 
+        />
       </div>
     </div>
   );

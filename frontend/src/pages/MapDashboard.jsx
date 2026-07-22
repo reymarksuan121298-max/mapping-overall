@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import KioskMap from '../components/KioskMap';
-import { MapPin, Users, Activity, Filter, Layers, Map as MapIcon, Shield, X, Search, ChevronDown, UserPlus, Save, Upload, Store } from 'lucide-react';
+import { MapPin, Users, Activity, Filter, Layers, Map as MapIcon, Shield, X, Search, ChevronDown, UserPlus, Save, Upload, Store, AlertTriangle } from 'lucide-react';
+import AlertModal from '../components/AlertModal';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function MapDashboard({ user }) {
   const [employees, setEmployees] = useState([]);
@@ -46,6 +48,8 @@ export default function MapDashboard({ user }) {
   const [selectedSupervisor, setSelectedSupervisor] = useState('all');
   const [isTacticalOpen, setIsTacticalOpen] = useState(false);
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
+  const [alertState, setAlertState] = useState({ isOpen: false, message: '', type: 'error' });
+  const [confirmState, setConfirmState] = useState({ isOpen: false, message: '', onConfirm: null });
 
   useEffect(() => {
     fetchData();
@@ -97,10 +101,12 @@ export default function MapDashboard({ user }) {
         const fname = franchise.name.toUpperCase();
         if (fname.includes('5A')) prefix = '5A';
         else if (fname.includes('LUCKY BETPLAY') || fname.includes('LBP')) prefix = 'LB';
+        else if (fname.includes('GLOWING FORTUNE') || fname.includes('GF')) prefix = 'GF';
         else prefix = fname.split(' ').map(w => w[0]).join('').substring(0, 3);
         
         const areaPart = area.name.toUpperCase().replace(/\s+/g, '-');
         
+        // Count existing employees in this specific area to generate sequence
         const matchingEmployees = employees.filter(e => e.employee_id && e.employee_id.startsWith(`${prefix}-${areaPart}-`));
         let maxSuffix = 0;
         matchingEmployees.forEach(e => {
@@ -225,9 +231,27 @@ export default function MapDashboard({ user }) {
       
     } catch (error) {
       console.error('Error uploading image:', error);
-      alert(error.message || 'Error uploading image.');
+      setAlertState({ isOpen: true, message: error.message || 'Error uploading image.', type: 'error' });
     } finally {
       setUploading(prev => ({ ...prev, [fieldName]: false }));
+    }
+  };
+
+  const checkGeofence = async (lat, lng) => {
+    const query = `[out:json];(node["amenity"="school"](around:200,${lat},${lng});way["amenity"="school"](around:200,${lat},${lng});relation["amenity"="school"](around:200,${lat},${lng});node["amenity"="place_of_worship"](around:200,${lat},${lng});way["amenity"="place_of_worship"](around:200,${lat},${lng});relation["amenity"="place_of_worship"](around:200,${lat},${lng}););out body;`;
+    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data.elements && data.elements.length > 0) {
+        const isSchool = data.elements.some(e => e.tags && e.tags.amenity === 'school');
+        const isChurch = data.elements.some(e => e.tags && e.tags.amenity === 'place_of_worship');
+        return { restricted: true, isSchool, isChurch };
+      }
+      return { restricted: false };
+    } catch (err) {
+      console.error("Overpass API error:", err);
+      return { restricted: false, error: true };
     }
   };
 
@@ -250,19 +274,35 @@ export default function MapDashboard({ user }) {
         coordinate_screenshot_url: employeeFormData.coordinate_screenshot_url || null
       };
 
+      if (!editingEmployeeId && selectedLocation.lat && selectedLocation.lng) {
+        const geoCheck = await checkGeofence(selectedLocation.lat, selectedLocation.lng);
+        if (geoCheck.restricted) {
+          const placeType = geoCheck.isSchool && geoCheck.isChurch ? 'a school and a church' : geoCheck.isSchool ? 'a school' : 'a church';
+          setAlertState({ isOpen: true, message: `Cannot add employee: The selected location is within 200 meters of ${placeType}.`, type: 'error' });
+          setIsSaving(false);
+          return;
+        }
+      }
+
       if (editingEmployeeId) {
         const { error } = await supabase.from('employees').update(payload).eq('id', editingEmployeeId);
         if (error) throw error;
+        setAlertState({ isOpen: true, message: 'Successfully updated employee!', type: 'success' });
       } else {
         const { error } = await supabase.from('employees').insert([payload]);
         if (error) throw error;
+        setAlertState({ isOpen: true, message: 'Successfully added employee!', type: 'success' });
       }
       
       setIsEmployeeModalOpen(false);
       fetchData(); // Refresh data
     } catch (err) {
       console.error('Error saving employee:', err.message);
-      alert('Failed to save employee.');
+      let errorMsg = 'Failed to save employee.';
+      if (err.code === '23505' || err.message.includes('duplicate key') || err.message.includes('unique constraint')) {
+        errorMsg = 'An employee with this name already exists in this franchise.';
+      }
+      setAlertState({ isOpen: true, message: errorMsg, type: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -351,16 +391,23 @@ export default function MapDashboard({ user }) {
     setIsEmployeeModalOpen(true);
   }, []);
 
-  const handleDeleteEmployee = async (kiosk) => {
-    if (!window.confirm(`Are you sure you want to delete ${kiosk.full_name}?`)) return;
-    try {
-      const { error } = await supabase.from('employees').delete().eq('id', kiosk.id);
-      if (error) throw error;
-      fetchData(); // Refresh data
-    } catch (err) {
-      console.error('Error deleting employee:', err.message);
-      alert('Failed to delete employee.');
-    }
+  const handleDeleteEmployee = (kiosk) => {
+    setConfirmState({
+      isOpen: true,
+      message: `Are you sure you want to delete ${kiosk.full_name}?`,
+      onConfirm: async () => {
+        setConfirmState(prev => ({ ...prev, isOpen: false }));
+        try {
+          const { error } = await supabase.from('employees').delete().eq('id', kiosk.id);
+          if (error) throw error;
+          setAlertState({ isOpen: true, message: 'Successfully deleted employee!', type: 'success' });
+          fetchData(); // Refresh data
+        } catch (err) {
+          console.error('Error deleting employee:', err.message);
+          setAlertState({ isOpen: true, message: 'Failed to delete employee.', type: 'error' });
+        }
+      }
+    });
   };
 
   return (
@@ -806,6 +853,18 @@ export default function MapDashboard({ user }) {
         </div>
       )}
 
+      <AlertModal 
+        isOpen={alertState.isOpen} 
+        message={alertState.message} 
+        type={alertState.type} 
+        onClose={() => setAlertState({ ...alertState, isOpen: false })} 
+      />
+      <ConfirmModal 
+        isOpen={confirmState.isOpen} 
+        message={confirmState.message} 
+        onConfirm={confirmState.onConfirm} 
+        onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} 
+      />
     </div>
   );
 }

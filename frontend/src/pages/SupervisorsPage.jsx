@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { UserCog, Search, Filter, Plus, Edit2, Trash2, X } from 'lucide-react';
+import AlertModal from '../components/AlertModal';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function SupervisorsPage({ user }) {
   const [supervisors, setSupervisors] = useState([]);
@@ -8,6 +10,8 @@ export default function SupervisorsPage({ user }) {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState([]);
+  const [alertState, setAlertState] = useState({ isOpen: false, message: '', type: 'error' });
+  const [confirmState, setConfirmState] = useState({ isOpen: false, message: '', onConfirm: null });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
@@ -73,16 +77,23 @@ export default function SupervisorsPage({ user }) {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this supervisor?')) return;
-    try {
-      const { error } = await supabase.from('supervisors').delete().eq('id', id);
-      if (error) throw error;
-      fetchSupervisors();
-    } catch (err) {
-      console.error('Error deleting supervisor:', err.message);
-      alert('Failed to delete supervisor.');
-    }
+  const handleDeleteSupervisor = (item) => {
+    setConfirmState({
+      isOpen: true,
+      message: 'Are you sure you want to delete this supervisor?',
+      onConfirm: async () => {
+        setConfirmState(prev => ({ ...prev, isOpen: false }));
+        try {
+          const { error } = await supabase.from('supervisors').delete().eq('id', item.id);
+          if (error) throw error;
+          setAlertState({ isOpen: true, message: 'Successfully deleted supervisor!', type: 'success' });
+          fetchSupervisors();
+        } catch (err) {
+          console.error('Error deleting supervisor:', err.message);
+          setAlertState({ isOpen: true, message: 'Failed to delete supervisor.', type: 'error' });
+        }
+      }
+    });
   };
 
   const toggleSelectAll = () => {
@@ -101,17 +112,25 @@ export default function SupervisorsPage({ user }) {
     }
   };
 
-  const handleBulkDelete = async () => {
-    if (!window.confirm(`Are you sure you want to delete ${selectedIds.length} supervisor(s)?`)) return;
-    try {
-      const { error } = await supabase.from('supervisors').delete().in('id', selectedIds);
-      if (error) throw error;
-      setSelectedIds([]);
-      fetchSupervisors();
-    } catch (err) {
-      console.error('Error deleting supervisors:', err.message);
-      alert('Failed to delete supervisors.');
-    }
+  const handleDeleteSelected = () => {
+    if (selectedIds.length === 0) return;
+    setConfirmState({
+      isOpen: true,
+      message: `Are you sure you want to delete ${selectedIds.length} supervisor(s)?`,
+      onConfirm: async () => {
+        setConfirmState(prev => ({ ...prev, isOpen: false }));
+        try {
+          const { error } = await supabase.from('supervisors').delete().in('id', selectedIds);
+          if (error) throw error;
+          setSelectedIds([]);
+          setAlertState({ isOpen: true, message: 'Successfully deleted supervisors!', type: 'success' });
+          fetchSupervisors();
+        } catch (err) {
+          console.error('Error deleting supervisors:', err.message);
+          setAlertState({ isOpen: true, message: 'Failed to delete supervisors.', type: 'error' });
+        }
+      }
+    });
   };
 
   const handleSave = async (e) => {
@@ -126,15 +145,21 @@ export default function SupervisorsPage({ user }) {
       if (modalMode === 'add') {
         const { error } = await supabase.from('supervisors').insert([payload]);
         if (error) throw error;
+        setAlertState({ isOpen: true, message: 'Successfully added supervisor!', type: 'success' });
       } else {
         const { error } = await supabase.from('supervisors').update(payload).eq('id', editingId);
         if (error) throw error;
+        setAlertState({ isOpen: true, message: 'Successfully updated supervisor!', type: 'success' });
       }
       setIsModalOpen(false);
       fetchSupervisors();
     } catch (err) {
       console.error('Error saving supervisor:', err.message);
-      alert('Failed to save supervisor.');
+      let errorMsg = 'Failed to save supervisor.';
+      if (err.code === '23505' || err.message.includes('duplicate key') || err.message.includes('unique constraint')) {
+        errorMsg = 'A supervisor with this name already exists in this franchise.';
+      }
+      setAlertState({ isOpen: true, message: errorMsg, type: 'error' });
     }
   };
 
@@ -163,7 +188,7 @@ export default function SupervisorsPage({ user }) {
             </div>
             {selectedIds.length > 0 && (
               <button 
-                onClick={handleBulkDelete}
+                onClick={handleDeleteSelected}
                 className="bg-rose-500/20 text-rose-400 border border-rose-500/50 hover:bg-rose-500/30 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-inner animate-in fade-in zoom-in duration-200"
               >
                 <Trash2 size={16} /> Delete Selected ({selectedIds.length})
@@ -250,7 +275,7 @@ export default function SupervisorsPage({ user }) {
                           <button onClick={() => openEditModal(spvr)} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-blue-400 transition-colors">
                             <Edit2 size={16} />
                           </button>
-                          <button onClick={() => handleDelete(spvr.id)} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-rose-400 transition-colors">
+                          <button onClick={() => handleDeleteSupervisor(spvr)} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-rose-400 transition-colors">
                             <Trash2 size={16} />
                           </button>
                         </div>
@@ -334,6 +359,18 @@ export default function SupervisorsPage({ user }) {
             </div>
           </div>
         )}
+        <AlertModal 
+          isOpen={alertState.isOpen} 
+          message={alertState.message} 
+          type={alertState.type} 
+          onClose={() => setAlertState({ ...alertState, isOpen: false })} 
+        />
+        <ConfirmModal 
+          isOpen={confirmState.isOpen} 
+          message={confirmState.message} 
+          onConfirm={confirmState.onConfirm} 
+          onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} 
+        />
       </div>
     </div>
   );

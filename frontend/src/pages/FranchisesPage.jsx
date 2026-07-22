@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { Building2, Search, Filter, Plus, Edit2, Trash2, X } from 'lucide-react';
+import AlertModal from '../components/AlertModal';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function FranchisesPage() {
   const [franchises, setFranchises] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [alertState, setAlertState] = useState({ isOpen: false, message: '', type: 'error' });
+  const [confirmState, setConfirmState] = useState({ isOpen: false, message: '', onConfirm: null });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
@@ -60,16 +64,23 @@ export default function FranchisesPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this franchise? All linked data may be affected.')) return;
-    try {
-      const { error } = await supabase.from('franchises').delete().eq('id', id);
-      if (error) throw error;
-      fetchFranchises();
-    } catch (err) {
-      console.error('Error deleting franchise:', err.message);
-      alert('Failed to delete franchise.');
-    }
+  const handleDelete = (id) => {
+    setConfirmState({
+      isOpen: true,
+      message: 'Are you sure you want to delete this franchise? All linked data may be affected.',
+      onConfirm: async () => {
+        setConfirmState(prev => ({ ...prev, isOpen: false }));
+        try {
+          const { error } = await supabase.from('franchises').delete().eq('id', id);
+          if (error) throw error;
+          setAlertState({ isOpen: true, message: 'Successfully deleted franchise!', type: 'success' });
+          fetchFranchises();
+        } catch (err) {
+          console.error('Error deleting franchise:', err.message);
+          setAlertState({ isOpen: true, message: 'Failed to delete franchise.', type: 'error' });
+        }
+      }
+    });
   };
 
   const handleSave = async (e) => {
@@ -82,15 +93,21 @@ export default function FranchisesPage() {
       if (modalMode === 'add') {
         const { error } = await supabase.from('franchises').insert([payload]);
         if (error) throw error;
+        setAlertState({ isOpen: true, message: 'Successfully added franchise!', type: 'success' });
       } else {
         const { error } = await supabase.from('franchises').update(payload).eq('id', editingId);
         if (error) throw error;
+        setAlertState({ isOpen: true, message: 'Successfully updated franchise!', type: 'success' });
       }
       setIsModalOpen(false);
       fetchFranchises();
     } catch (err) {
       console.error('Error saving franchise:', err.message);
-      alert('Failed to save franchise.');
+      let errorMsg = 'Failed to save franchise.';
+      if (err.code === '23505' || err.message.includes('duplicate key') || err.message.includes('unique constraint')) {
+        errorMsg = 'A franchise with this name already exists.';
+      }
+      setAlertState({ isOpen: true, message: errorMsg, type: 'error' });
     }
   };
 
@@ -219,6 +236,19 @@ export default function FranchisesPage() {
           </div>
         )}
       </div>
+
+      <AlertModal 
+        isOpen={alertState.isOpen} 
+        message={alertState.message} 
+        type={alertState.type} 
+        onClose={() => setAlertState({ ...alertState, isOpen: false })} 
+      />
+      <ConfirmModal 
+        isOpen={confirmState.isOpen} 
+        message={confirmState.message} 
+        onConfirm={confirmState.onConfirm} 
+        onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} 
+      />
     </div>
   );
 }

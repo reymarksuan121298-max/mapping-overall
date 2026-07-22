@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { LandPlot, Search, Filter, Plus, Edit2, Trash2, X } from 'lucide-react';
+import AlertModal from '../components/AlertModal';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function MunicipalitiesPage() {
   const [municipalities, setMunicipalities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [alertState, setAlertState] = useState({ isOpen: false, message: '', type: 'error' });
+  const [confirmState, setConfirmState] = useState({ isOpen: false, message: '', onConfirm: null });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
@@ -60,16 +64,23 @@ export default function MunicipalitiesPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this municipality? All linked data may be affected.')) return;
-    try {
-      const { error } = await supabase.from('municipalities').delete().eq('id', id);
-      if (error) throw error;
-      fetchMunicipalities();
-    } catch (err) {
-      console.error('Error deleting municipality:', err.message);
-      alert('Failed to delete municipality.');
-    }
+  const handleDelete = (id) => {
+    setConfirmState({
+      isOpen: true,
+      message: 'Are you sure you want to delete this municipality? All linked data may be affected.',
+      onConfirm: async () => {
+        setConfirmState(prev => ({ ...prev, isOpen: false }));
+        try {
+          const { error } = await supabase.from('municipalities').delete().eq('id', id);
+          if (error) throw error;
+          setAlertState({ isOpen: true, message: 'Successfully deleted municipality!', type: 'success' });
+          fetchMunicipalities();
+        } catch (err) {
+          console.error('Error deleting municipality:', err.message);
+          setAlertState({ isOpen: true, message: 'Failed to delete municipality.', type: 'error' });
+        }
+      }
+    });
   };
 
   const handleSave = async (e) => {
@@ -82,15 +93,21 @@ export default function MunicipalitiesPage() {
       if (modalMode === 'add') {
         const { error } = await supabase.from('municipalities').insert([payload]);
         if (error) throw error;
+        setAlertState({ isOpen: true, message: 'Successfully added municipality!', type: 'success' });
       } else {
         const { error } = await supabase.from('municipalities').update(payload).eq('id', editingId);
         if (error) throw error;
+        setAlertState({ isOpen: true, message: 'Successfully updated municipality!', type: 'success' });
       }
       setIsModalOpen(false);
       fetchMunicipalities();
     } catch (err) {
       console.error('Error saving municipality:', err.message);
-      alert('Failed to save municipality.');
+      let errorMsg = 'Failed to save municipality.';
+      if (err.code === '23505' || err.message.includes('duplicate key') || err.message.includes('unique constraint')) {
+        errorMsg = 'A municipality with this name already exists.';
+      }
+      setAlertState({ isOpen: true, message: errorMsg, type: 'error' });
     }
   };
 
@@ -218,6 +235,19 @@ export default function MunicipalitiesPage() {
             </div>
           </div>
         )}
+        
+        <AlertModal 
+          isOpen={alertState.isOpen} 
+          message={alertState.message} 
+          type={alertState.type} 
+          onClose={() => setAlertState({ ...alertState, isOpen: false })} 
+        />
+        <ConfirmModal 
+          isOpen={confirmState.isOpen} 
+          message={confirmState.message} 
+          onConfirm={confirmState.onConfirm} 
+          onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} 
+        />
       </div>
     </div>
   );
