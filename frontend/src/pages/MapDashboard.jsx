@@ -147,7 +147,7 @@ export default function MapDashboard({ user }) {
               franchises (name),
               areas (name),
               supervisors (name, color)
-            `).not('latitude', 'is', null).not('longitude', 'is', null).range(from, to);
+            `).range(from, to);
             
             if (error) return { error };
             if (!data || data.length === 0) break;
@@ -761,8 +761,26 @@ export default function MapDashboard({ user }) {
                   <div className="bg-slate-900/50 rounded-xl p-3 border border-slate-700/50 mt-4">
                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Coordinates</label>
                     <div className="flex gap-4 font-mono text-sm text-emerald-400">
-                      <div><span className="text-slate-500 mr-1">LAT:</span>{selectedLocation?.lat.toFixed(6)}</div>
-                      <div><span className="text-slate-500 mr-1">LNG:</span>{selectedLocation?.lng.toFixed(6)}</div>
+                      <div className="flex items-center">
+                        <span className="text-slate-500 mr-1">LAT:</span>
+                        <input
+                          type="number"
+                          step="any"
+                          value={selectedLocation?.lat ?? ''}
+                          onChange={(e) => setSelectedLocation(prev => ({ ...prev, lat: e.target.value }))}
+                          className="w-[100px] bg-transparent border-b border-slate-700 focus:border-emerald-500 outline-none text-emerald-400 font-mono"
+                        />
+                      </div>
+                      <div className="flex items-center">
+                        <span className="text-slate-500 mr-1">LNG:</span>
+                        <input
+                          type="number"
+                          step="any"
+                          value={selectedLocation?.lng ?? ''}
+                          onChange={(e) => setSelectedLocation(prev => ({ ...prev, lng: e.target.value }))}
+                          className="w-[100px] bg-transparent border-b border-slate-700 focus:border-emerald-500 outline-none text-emerald-400 font-mono"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -31,20 +31,50 @@ export default function SupervisorsPage({ user }) {
   const fetchSupervisors = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('supervisors')
-        .select(`
-          id, name, color, franchise_id,
-          franchises (name),
-          employees (id)
-        `)
-        .order('name');
+      const [supervisorsRes, employeesRes] = await Promise.all([
+        supabase
+          .from('supervisors')
+          .select(`
+            id, name, color, franchise_id,
+            franchises (name)
+          `)
+          .order('name'),
+        (async () => {
+          let allData = [];
+          let from = 0;
+          let to = 999;
+          while (true) {
+            const { data, error } = await supabase
+              .from('employees')
+              .select('id, supervisor_id')
+              .range(from, to);
+            
+            if (error) return { error };
+            if (!data || data.length === 0) break;
+            
+            allData = allData.concat(data);
+            
+            if (data.length < 1000) break;
+            from += 1000;
+            to += 1000;
+          }
+          return { data: allData };
+        })()
+      ]);
         
-      if (error) throw error;
+      if (supervisorsRes.error) throw supervisorsRes.error;
+      if (employeesRes.error) throw employeesRes.error;
       
-      let enrichedData = (data || []).map(spvr => ({
+      const employeeCounts = {};
+      (employeesRes.data || []).forEach(emp => {
+        if (emp.supervisor_id) {
+          employeeCounts[emp.supervisor_id] = (employeeCounts[emp.supervisor_id] || 0) + 1;
+        }
+      });
+      
+      let enrichedData = (supervisorsRes.data || []).map(spvr => ({
         ...spvr,
-        employeeCount: spvr.employees ? spvr.employees.length : 0
+        employeeCount: employeeCounts[spvr.id] || 0
       }));
       
       if (user?.role === 'franchise_admin') {

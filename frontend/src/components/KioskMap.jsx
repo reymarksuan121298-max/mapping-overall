@@ -69,8 +69,9 @@ function MapBounds({ kiosks, isFiltered }) {
   const map = useMap();
 
   useEffect(() => {
-    if (kiosks && kiosks.length > 0 && isFiltered) {
-      const bounds = L.latLngBounds(kiosks.map(k => [k.latitude, k.longitude]));
+    const validKiosks = kiosks ? kiosks.filter(k => k.latitude != null && k.longitude != null) : [];
+    if (validKiosks.length > 0 && isFiltered) {
+      const bounds = L.latLngBounds(validKiosks.map(k => [k.latitude, k.longitude]));
       // Add padding and limit max zoom
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
     }
@@ -105,7 +106,7 @@ const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLoca
   const [isLayerMenuOpen, setIsLayerMenuOpen] = useState(false);
 
   const renderCircles = useMemo(() => {
-    return kiosks.map((kiosk) => {
+    return kiosks.filter(k => k.latitude != null && k.longitude != null).map((kiosk) => {
       const spvrColor = kiosk.supervisors?.color || '#10b981';
       const radius = parseInt(kiosk.allowed_radius, 10) || 100;
       return (
@@ -121,7 +122,7 @@ const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLoca
 
   // Aggressively memoize markers so they are completely immune to local state changes (like opening the Layer menu)
   const renderMarkers = useMemo(() => {
-    return kiosks.map((kiosk) => {
+    return kiosks.filter(k => k.latitude != null && k.longitude != null).map((kiosk) => {
       const spvrColor = kiosk.supervisors?.color || '#10b981';
       return (
         <Marker 

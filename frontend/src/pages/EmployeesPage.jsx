@@ -99,13 +99,30 @@ export default function EmployeesPage({ user }) {
         supabase.from('franchises').select('*'),
         supabase.from('areas').select('*'),
         supabase.from('supervisors').select('*'),
-        supabase.from('employees').select(`
-          id, employee_id, full_name, role, status, franchise_id, area_id, supervisor_id,
-          photo_url, id_photo_url, coordinate_screenshot_url,
-          franchises (name),
-          areas (name),
-          supervisors (name, color)
-        `).order('full_name')
+        (async () => {
+          let allData = [];
+          let from = 0;
+          let to = 999;
+          while (true) {
+            const { data, error } = await supabase.from('employees').select(`
+              id, employee_id, full_name, role, status, franchise_id, area_id, supervisor_id,
+              photo_url, id_photo_url, coordinate_screenshot_url,
+              franchises (name),
+              areas (name),
+              supervisors (name, color)
+            `).order('full_name').range(from, to);
+            
+            if (error) return { error };
+            if (!data || data.length === 0) break;
+            
+            allData = allData.concat(data);
+            
+            if (data.length < 1000) break;
+            from += 1000;
+            to += 1000;
+          }
+          return { data: allData };
+        })()
       ]);
 
       if (franchiseRes.data) setFranchises(franchiseRes.data);
