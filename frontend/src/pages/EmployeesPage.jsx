@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { Users, Search, Filter, Plus, Edit2, Trash2, X, Upload, Store, MapPin, AlertTriangle } from 'lucide-react';
 import AlertModal from '../components/AlertModal';
@@ -18,6 +18,19 @@ export default function EmployeesPage({ user }) {
   const [selectedSupervisor, setSelectedSupervisor] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
+  const filterRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (filterRef.current && !filterRef.current.contains(event.target)) {
+        setShowFilters(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -378,65 +391,66 @@ export default function EmployeesPage({ user }) {
                 className="bg-slate-800/80 border border-slate-700 text-slate-200 pl-10 pr-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none w-64 shadow-inner"
               />
             </div>
-            <button 
-              onClick={() => setShowFilters(!showFilters)}
-              className={`border hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-inner ${showFilters ? 'bg-slate-700 border-slate-600' : 'bg-slate-800 border-slate-700'}`}
-            >
-              <Filter size={16} className={showFilters ? 'text-emerald-400' : ''} /> Filter
-            </button>
-            <button onClick={openAddModal} className="bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-              <Plus size={16} /> Add Employee
-            </button>
 
-            {/* Filter Popover */}
-            {showFilters && (
-              <div className="absolute top-full right-0 mt-2 w-72 bg-slate-800 border border-slate-700 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] z-50 p-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="space-y-4">
-                  {(!user || !user.franchise_id) && (
+            <div className="relative" ref={filterRef}>
+              <button 
+                onClick={() => setShowFilters(!showFilters)}
+                className={`border hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-inner ${showFilters ? 'bg-slate-700 border-slate-600' : 'bg-slate-800 border-slate-700'}`}
+              >
+                <Filter size={16} className={showFilters ? 'text-emerald-400' : ''} /> Filter
+              </button>
+
+              {/* Filter Popover */}
+              {showFilters && (
+                <div className="absolute top-full right-0 mt-2 w-72 bg-slate-800 border border-slate-700 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] z-50 p-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="space-y-4">
+                    {(!user || !user.franchise_id) && (
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Franchise</label>
+                        <select 
+                          className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none p-2 cursor-pointer"
+                          value={selectedFranchise}
+                          onChange={(e) => {
+                            setSelectedFranchise(e.target.value);
+                            setSelectedSupervisor('all');
+                          }}
+                        >
+                          <option value="all">All Franchises</option>
+                          {franchises.map(f => (
+                            <option key={f.id} value={f.id}>{f.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Franchise</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Area</label>
                       <select 
                         className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none p-2 cursor-pointer"
-                        value={selectedFranchise}
-                        onChange={(e) => setSelectedFranchise(e.target.value)}
+                        value={selectedArea}
+                        onChange={(e) => setSelectedArea(e.target.value)}
                       >
-                        <option value="all">All Franchises</option>
-                        {franchises.map(f => (
-                          <option key={f.id} value={f.id}>{f.name}</option>
+                        <option value="all">All Areas</option>
+                        {areas.map(a => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
                         ))}
                       </select>
                     </div>
-                  )}
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Area</label>
-                    <select 
-                      className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none p-2 cursor-pointer"
-                      value={selectedArea}
-                      onChange={(e) => setSelectedArea(e.target.value)}
-                    >
-                      <option value="all">All Areas</option>
-                      {areas.map(a => (
-                        <option key={a.id} value={a.id}>{a.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Supervisor</label>
-                    <select 
-                      className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none p-2 cursor-pointer"
-                      value={selectedSupervisor}
-                      onChange={(e) => setSelectedSupervisor(e.target.value)}
-                    >
-                      <option value="all">All Supervisors</option>
-                      {supervisors
-                        .filter(s => selectedFranchise === 'all' || s.franchise_id?.toString() === selectedFranchise)
-                        .map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Supervisor</label>
+                      <select 
+                        className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none p-2 cursor-pointer"
+                        value={selectedSupervisor}
+                        onChange={(e) => setSelectedSupervisor(e.target.value)}
+                      >
+                        <option value="all">All Supervisors</option>
+                        {supervisors
+                          .filter(s => selectedFranchise === 'all' || s.franchise_id?.toString() === selectedFranchise)
+                          .map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
 
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</label>
@@ -459,6 +473,11 @@ export default function EmployeesPage({ user }) {
                 </div>
               </div>
             )}
+            </div>
+
+            <button onClick={openAddModal} className="bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+              <Plus size={16} /> Add Employee
+            </button>
           </div>
         </header>
 
