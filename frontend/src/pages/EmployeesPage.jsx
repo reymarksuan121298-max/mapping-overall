@@ -119,7 +119,7 @@ export default function EmployeesPage({ user }) {
           while (true) {
             const { data, error } = await supabase.from('employees').select(`
               id, employee_id, full_name, role, status, franchise_id, area_id, supervisor_id,
-              photo_url, id_photo_url, coordinate_screenshot_url,
+              photo_url, id_photo_url, coordinate_screenshot_url, allowed_radius,
               franchises (name),
               areas (name),
               supervisors (name, color)
@@ -334,6 +334,46 @@ export default function EmployeesPage({ user }) {
   const handleSave = async (e) => {
     e.preventDefault();
     try {
+      // Check for employee location collision
+      if (formData.latitude && formData.longitude) {
+        const R = 6371e3; // metres
+        const lat1 = parseFloat(formData.latitude);
+        const lon1 = parseFloat(formData.longitude);
+        let hasCollision = false;
+        let collisionName = '';
+        
+        for (const emp of employees) {
+          if (modalMode === 'edit' && emp.id === editingId) continue;
+          if (!emp.latitude || !emp.longitude) continue;
+          
+          const lat2 = parseFloat(emp.latitude);
+          const lon2 = parseFloat(emp.longitude);
+          
+          const φ1 = lat1 * Math.PI/180;
+          const φ2 = lat2 * Math.PI/180;
+          const Δφ = (lat2-lat1) * Math.PI/180;
+          const Δλ = (lon2-lon1) * Math.PI/180;
+
+          const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                    Math.cos(φ1) * Math.cos(φ2) *
+                    Math.sin(Δλ/2) * Math.sin(Δλ/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const d = R * c;
+
+          const empRadius = parseFloat(emp.allowed_radius) || 100;
+          if (d <= empRadius) { // Use the existing employee's allowed radius for collision
+            hasCollision = true;
+            collisionName = emp.full_name;
+            break;
+          }
+        }
+        
+        if (hasCollision) {
+          setAlertState({ isOpen: true, message: `Cannot save employee: The location conflicts with an existing employee (${collisionName}).`, type: 'error' });
+          return;
+        }
+      }
+
       const payload = {
         employee_id: formData.employee_id,
         full_name: formData.full_name,

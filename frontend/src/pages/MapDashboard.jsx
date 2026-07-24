@@ -277,6 +277,47 @@ export default function MapDashboard({ user }) {
     
     setIsSaving(true);
     try {
+      // Check for employee location collision
+      if (selectedLocation.lat && selectedLocation.lng) {
+        const R = 6371e3; // metres
+        const lat1 = parseFloat(selectedLocation.lat);
+        const lon1 = parseFloat(selectedLocation.lng);
+        let hasCollision = false;
+        let collisionName = '';
+        
+        for (const emp of employees) {
+          if (editingEmployeeId && emp.id === editingEmployeeId) continue;
+          if (!emp.latitude || !emp.longitude) continue;
+          
+          const lat2 = parseFloat(emp.latitude);
+          const lon2 = parseFloat(emp.longitude);
+          
+          const φ1 = lat1 * Math.PI/180;
+          const φ2 = lat2 * Math.PI/180;
+          const Δφ = (lat2-lat1) * Math.PI/180;
+          const Δλ = (lon2-lon1) * Math.PI/180;
+
+          const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                    Math.cos(φ1) * Math.cos(φ2) *
+                    Math.sin(Δλ/2) * Math.sin(Δλ/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const d = R * c;
+
+          const empRadius = parseFloat(emp.allowed_radius) || 100;
+          if (d <= empRadius) { // Use the existing employee's allowed radius for collision
+            hasCollision = true;
+            collisionName = emp.full_name;
+            break;
+          }
+        }
+        
+        if (hasCollision) {
+          setAlertState({ isOpen: true, message: `Cannot save employee: The location conflicts with an existing employee (${collisionName}).`, type: 'error' });
+          setIsSaving(false);
+          return;
+        }
+      }
+
       const payload = {
         ...employeeFormData,
         latitude: selectedLocation.lat,
