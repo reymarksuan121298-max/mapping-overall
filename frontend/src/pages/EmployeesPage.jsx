@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { Users, Search, Filter, Plus, Edit2, Trash2, X, Upload, Store, MapPin, AlertTriangle } from 'lucide-react';
 import AlertModal from '../components/AlertModal';
@@ -12,12 +12,26 @@ export default function EmployeesPage({ user }) {
   const [franchises, setFranchises] = useState([]);
   const [areas, setAreas] = useState([]);
   const [supervisors, setSupervisors] = useState([]);
+  const [municipalities, setMunicipalities] = useState([]);
   
   const [selectedFranchise, setSelectedFranchise] = useState(user?.franchise_id ? user.franchise_id.toString() : 'all');
   const [selectedArea, setSelectedArea] = useState('all');
   const [selectedSupervisor, setSelectedSupervisor] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
+  const filterRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (filterRef.current && !filterRef.current.contains(event.target)) {
+        setShowFilters(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -31,7 +45,7 @@ export default function EmployeesPage({ user }) {
     area_id: '', 
     supervisor_id: '',
     contact_number: '',
-    municipality: 'None',
+    municipality_id: '',
     allowed_radius: '100',
     address: '',
     latitude: '',
@@ -95,18 +109,19 @@ export default function EmployeesPage({ user }) {
   const fetchEmployees = async () => {
     setLoading(true);
     try {
-      const [franchiseRes, areaRes, spvrRes, empRes] = await Promise.all([
+      const [franchiseRes, areaRes, spvrRes, muniRes, empRes] = await Promise.all([
         supabase.from('franchises').select('*'),
         supabase.from('areas').select('*'),
         supabase.from('supervisors').select('*'),
+        supabase.from('municipalities').select('*'),
         (async () => {
           let allData = [];
           let from = 0;
           let to = 999;
           while (true) {
             const { data, error } = await supabase.from('employees').select(`
-              id, employee_id, full_name, role, status, franchise_id, area_id, supervisor_id,
-              photo_url, id_photo_url, coordinate_screenshot_url,
+              id, employee_id, full_name, role, status, franchise_id, area_id, supervisor_id, municipality_id,
+              photo_url, id_photo_url, coordinate_screenshot_url, latitude, longitude,
               franchises (name),
               areas (name),
               supervisors (name, color)
@@ -127,6 +142,7 @@ export default function EmployeesPage({ user }) {
 
       if (franchiseRes.data) setFranchises(franchiseRes.data);
       if (areaRes.data) setAreas(areaRes.data);
+      if (muniRes.data) setMunicipalities(muniRes.data);
 
       if (spvrRes.data) {
         const spvrData = user?.role === 'franchise_admin' 
@@ -172,7 +188,7 @@ export default function EmployeesPage({ user }) {
       area_id: areas[0]?.id || '', 
       supervisor_id: '',
       contact_number: '',
-      municipality: 'None',
+      municipality_id: '',
       allowed_radius: '100',
       address: '',
       latitude: '',
@@ -196,7 +212,7 @@ export default function EmployeesPage({ user }) {
       area_id: emp.area_id || '',
       supervisor_id: emp.supervisor_id || '',
       contact_number: emp.contact_number || '',
-      municipality: emp.municipality || 'None',
+      municipality_id: emp.municipality_id || '',
       allowed_radius: emp.allowed_radius || '100',
       address: emp.address || '',
       latitude: emp.latitude || '',
@@ -284,6 +300,22 @@ export default function EmployeesPage({ user }) {
     }
   };
 
+  const handlePaste = (e, fieldName) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          handleFileUpload({ target: { files: [file] } }, fieldName);
+          break;
+        }
+      }
+    }
+  };
+
   const checkGeofence = async (lat, lng) => {
     const query = `[out:json];(node["amenity"="school"](around:200,${lat},${lng});way["amenity"="school"](around:200,${lat},${lng});relation["amenity"="school"](around:200,${lat},${lng});node["amenity"="place_of_worship"](around:200,${lat},${lng});way["amenity"="place_of_worship"](around:200,${lat},${lng});relation["amenity"="place_of_worship"](around:200,${lat},${lng}););out body;`;
     const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
@@ -305,6 +337,46 @@ export default function EmployeesPage({ user }) {
   const handleSave = async (e) => {
     e.preventDefault();
     try {
+      // Check for employee location collision
+      if (formData.latitude && formData.longitude) {
+        const R = 6371e3; // metres
+        const lat1 = parseFloat(formData.latitude);
+        const lon1 = parseFloat(formData.longitude);
+        let hasCollision = false;
+        let collisionName = '';
+        
+        for (const emp of employees) {
+          if (modalMode === 'edit' && emp.id === editingId) continue;
+          if (!emp.latitude || !emp.longitude) continue;
+          
+          const lat2 = parseFloat(emp.latitude);
+          const lon2 = parseFloat(emp.longitude);
+          
+          const φ1 = lat1 * Math.PI/180;
+          const φ2 = lat2 * Math.PI/180;
+          const Δφ = (lat2-lat1) * Math.PI/180;
+          const Δλ = (lon2-lon1) * Math.PI/180;
+
+          const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                    Math.cos(φ1) * Math.cos(φ2) *
+                    Math.sin(Δλ/2) * Math.sin(Δλ/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const d = R * c;
+
+          const empRadius = parseFloat(emp.allowed_radius) || 100;
+          if (d <= empRadius) { // Use the existing employee's allowed radius for collision
+            hasCollision = true;
+            collisionName = emp.full_name;
+            break;
+          }
+        }
+        
+        if (hasCollision) {
+          setAlertState({ isOpen: true, message: `Cannot save employee: The location conflicts with an existing employee (${collisionName}).`, type: 'error' });
+          return;
+        }
+      }
+
       const payload = {
         employee_id: formData.employee_id,
         full_name: formData.full_name,
@@ -320,8 +392,7 @@ export default function EmployeesPage({ user }) {
         longitude: formData.longitude || null,
         address: formData.address || null,
         contact_number: formData.contact_number || null,
-        municipality: formData.municipality || null,
-        allowed_radius: formData.allowed_radius || '100'
+        municipality_id: formData.municipality_id || null
       };
 
       if (modalMode === 'add' && formData.latitude && formData.longitude) {
@@ -378,65 +449,66 @@ export default function EmployeesPage({ user }) {
                 className="bg-slate-800/80 border border-slate-700 text-slate-200 pl-10 pr-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none w-64 shadow-inner"
               />
             </div>
-            <button 
-              onClick={() => setShowFilters(!showFilters)}
-              className={`border hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-inner ${showFilters ? 'bg-slate-700 border-slate-600' : 'bg-slate-800 border-slate-700'}`}
-            >
-              <Filter size={16} className={showFilters ? 'text-emerald-400' : ''} /> Filter
-            </button>
-            <button onClick={openAddModal} className="bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-              <Plus size={16} /> Add Employee
-            </button>
 
-            {/* Filter Popover */}
-            {showFilters && (
-              <div className="absolute top-full right-0 mt-2 w-72 bg-slate-800 border border-slate-700 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] z-50 p-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="space-y-4">
-                  {(!user || !user.franchise_id) && (
+            <div className="relative" ref={filterRef}>
+              <button 
+                onClick={() => setShowFilters(!showFilters)}
+                className={`border hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-inner ${showFilters ? 'bg-slate-700 border-slate-600' : 'bg-slate-800 border-slate-700'}`}
+              >
+                <Filter size={16} className={showFilters ? 'text-emerald-400' : ''} /> Filter
+              </button>
+
+              {/* Filter Popover */}
+              {showFilters && (
+                <div className="absolute top-full right-0 mt-2 w-72 bg-slate-800 border border-slate-700 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] z-50 p-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="space-y-4">
+                    {(!user || !user.franchise_id) && (
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Franchise</label>
+                        <select 
+                          className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none p-2 cursor-pointer"
+                          value={selectedFranchise}
+                          onChange={(e) => {
+                            setSelectedFranchise(e.target.value);
+                            setSelectedSupervisor('all');
+                          }}
+                        >
+                          <option value="all">All Franchises</option>
+                          {franchises.map(f => (
+                            <option key={f.id} value={f.id}>{f.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Franchise</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Area</label>
                       <select 
                         className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none p-2 cursor-pointer"
-                        value={selectedFranchise}
-                        onChange={(e) => setSelectedFranchise(e.target.value)}
+                        value={selectedArea}
+                        onChange={(e) => setSelectedArea(e.target.value)}
                       >
-                        <option value="all">All Franchises</option>
-                        {franchises.map(f => (
-                          <option key={f.id} value={f.id}>{f.name}</option>
+                        <option value="all">All Areas</option>
+                        {areas.map(a => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
                         ))}
                       </select>
                     </div>
-                  )}
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Area</label>
-                    <select 
-                      className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none p-2 cursor-pointer"
-                      value={selectedArea}
-                      onChange={(e) => setSelectedArea(e.target.value)}
-                    >
-                      <option value="all">All Areas</option>
-                      {areas.map(a => (
-                        <option key={a.id} value={a.id}>{a.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Supervisor</label>
-                    <select 
-                      className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none p-2 cursor-pointer"
-                      value={selectedSupervisor}
-                      onChange={(e) => setSelectedSupervisor(e.target.value)}
-                    >
-                      <option value="all">All Supervisors</option>
-                      {supervisors
-                        .filter(s => selectedFranchise === 'all' || s.franchise_id?.toString() === selectedFranchise)
-                        .map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Supervisor</label>
+                      <select 
+                        className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none p-2 cursor-pointer"
+                        value={selectedSupervisor}
+                        onChange={(e) => setSelectedSupervisor(e.target.value)}
+                      >
+                        <option value="all">All Supervisors</option>
+                        {supervisors
+                          .filter(s => selectedFranchise === 'all' || s.franchise_id?.toString() === selectedFranchise)
+                          .map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
 
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</label>
@@ -459,6 +531,11 @@ export default function EmployeesPage({ user }) {
                 </div>
               </div>
             )}
+            </div>
+
+            <button onClick={openAddModal} className="bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+              <Plus size={16} /> Add Employee
+            </button>
           </div>
         </header>
 
@@ -701,11 +778,16 @@ export default function EmployeesPage({ user }) {
                     <div>
                       <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Municipality (Optional)</label>
                       <select
-                        value={formData.municipality || 'None'}
-                        onChange={(e) => setFormData({...formData, municipality: e.target.value})}
+                        value={formData.municipality_id || ''}
+                        onChange={(e) => setFormData({...formData, municipality_id: e.target.value})}
                         className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all appearance-none"
                       >
-                        <option value="None">None</option>
+                        <option value="">None</option>
+                        {municipalities
+                          .filter(m => !formData.franchise_id || m.franchise_id?.toString() === formData.franchise_id?.toString())
+                          .map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
                       </select>
                     </div>
 
@@ -741,18 +823,22 @@ export default function EmployeesPage({ user }) {
                     {/* 2x2 Picture */}
                     <div>
                       <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Employee 2x2 Picture</label>
-                      <div className="border border-emerald-500/30 border-dashed bg-emerald-500/5 rounded-xl p-3 flex gap-3 h-[110px]">
-                        <div className="w-[84px] h-[84px] bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      <div 
+                        className="border border-emerald-500/30 border-dashed bg-emerald-500/5 rounded-xl p-3 flex gap-3 h-[110px] focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all cursor-pointer"
+                        tabIndex={0}
+                        onPaste={(e) => handlePaste(e, 'photo_url')}
+                      >
+                        <div className="w-[84px] h-[84px] bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden pointer-events-none">
                           {formData.photo_url ? (
                             <img src={formData.photo_url} alt="2x2" className="w-full h-full object-cover" />
                           ) : (
                             <span className="text-2xl font-black text-slate-600">2x2</span>
                           )}
                         </div>
-                        <div className="flex flex-col justify-center">
+                        <div className="flex flex-col justify-center pointer-events-none">
                           <span className="text-xs font-bold text-slate-300">2x2 Picture</span>
-                          <span className="text-[10px] text-slate-500 mt-0.5 leading-tight mb-2">Upload the employee's 2x2 photo.</span>
-                          <label className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer">
+                          <span className="text-[10px] text-slate-500 mt-0.5 leading-tight mb-2">Upload or paste 2x2 photo.</span>
+                          <label className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer pointer-events-auto">
                             {uploading.photo_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
                             <input type="file" accept="image/*" className="hidden" disabled={uploading.photo_url} onChange={(e) => handleFileUpload(e, 'photo_url')} />
                           </label>
@@ -763,18 +849,23 @@ export default function EmployeesPage({ user }) {
                     {/* Kiosk Location Image */}
                     <div>
                       <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Kiosk Location Image</label>
-                      <div className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50">
-                        <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden">
+                      <div 
+                        className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all cursor-pointer"
+                        tabIndex={0}
+                        onPaste={(e) => handlePaste(e, 'id_photo_url')}
+                      >
+                        <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden pointer-events-none">
                           {formData.id_photo_url ? (
                             <img src={formData.id_photo_url} alt="Kiosk" className="w-full h-full object-cover" />
                           ) : (
                             <Store size={24} />
                           )}
                         </div>
-                        <div className="flex flex-col justify-center">
-                          <span className="text-xs font-bold text-slate-300 mb-2">Kiosk Photo</span>
-                          <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer">
-                            {uploading.id_photo_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
+                        <div className="flex flex-col justify-center pointer-events-none">
+                          <span className="text-xs font-bold text-slate-300 mb-1">Kiosk Photo</span>
+                          <span className="text-[9px] text-slate-500 mb-2 leading-tight max-w-[80px]">Upload or paste photo</span>
+                          <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer pointer-events-auto">
+                            {uploading.id_photo_url ? '...' : <><Upload size={12} /> Upload</>}
                             <input type="file" accept="image/*" className="hidden" disabled={uploading.id_photo_url} onChange={(e) => handleFileUpload(e, 'id_photo_url')} />
                           </label>
                         </div>
@@ -784,18 +875,23 @@ export default function EmployeesPage({ user }) {
                     {/* GPS Screenshot */}
                     <div>
                       <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">GPS Screenshot</label>
-                      <div className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50">
-                        <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden">
+                      <div 
+                        className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all cursor-pointer"
+                        tabIndex={0}
+                        onPaste={(e) => handlePaste(e, 'coordinate_screenshot_url')}
+                      >
+                        <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden pointer-events-none">
                           {formData.coordinate_screenshot_url ? (
                             <img src={formData.coordinate_screenshot_url} alt="GPS" className="w-full h-full object-cover" />
                           ) : (
                             <MapPin size={24} />
                           )}
                         </div>
-                        <div className="flex flex-col justify-center">
-                          <span className="text-xs font-bold text-slate-300 leading-tight mb-2">GPS<br/>Screenshot</span>
-                          <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer">
-                            {uploading.coordinate_screenshot_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
+                        <div className="flex flex-col justify-center pointer-events-none">
+                          <span className="text-xs font-bold text-slate-300 leading-tight mb-1">GPS<br/>Screenshot</span>
+                          <span className="text-[9px] text-slate-500 mb-2 max-w-[80px]">Upload or paste</span>
+                          <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer pointer-events-auto">
+                            {uploading.coordinate_screenshot_url ? '...' : <><Upload size={12} /> Upload</>}
                             <input type="file" accept="image/*" className="hidden" disabled={uploading.coordinate_screenshot_url} onChange={(e) => handleFileUpload(e, 'coordinate_screenshot_url')} />
                           </label>
                         </div>

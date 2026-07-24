@@ -237,6 +237,22 @@ export default function MapDashboard({ user }) {
     }
   };
 
+  const handlePaste = (e, fieldName) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          handleFileUpload({ target: { files: [file] } }, fieldName);
+          break;
+        }
+      }
+    }
+  };
+
   const checkGeofence = async (lat, lng) => {
     const query = `[out:json];(node["amenity"="school"](around:200,${lat},${lng});way["amenity"="school"](around:200,${lat},${lng});relation["amenity"="school"](around:200,${lat},${lng});node["amenity"="place_of_worship"](around:200,${lat},${lng});way["amenity"="place_of_worship"](around:200,${lat},${lng});relation["amenity"="place_of_worship"](around:200,${lat},${lng}););out body;`;
     const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
@@ -261,6 +277,47 @@ export default function MapDashboard({ user }) {
     
     setIsSaving(true);
     try {
+      // Check for employee location collision
+      if (selectedLocation.lat && selectedLocation.lng) {
+        const R = 6371e3; // metres
+        const lat1 = parseFloat(selectedLocation.lat);
+        const lon1 = parseFloat(selectedLocation.lng);
+        let hasCollision = false;
+        let collisionName = '';
+        
+        for (const emp of employees) {
+          if (editingEmployeeId && emp.id === editingEmployeeId) continue;
+          if (!emp.latitude || !emp.longitude) continue;
+          
+          const lat2 = parseFloat(emp.latitude);
+          const lon2 = parseFloat(emp.longitude);
+          
+          const φ1 = lat1 * Math.PI/180;
+          const φ2 = lat2 * Math.PI/180;
+          const Δφ = (lat2-lat1) * Math.PI/180;
+          const Δλ = (lon2-lon1) * Math.PI/180;
+
+          const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                    Math.cos(φ1) * Math.cos(φ2) *
+                    Math.sin(Δλ/2) * Math.sin(Δλ/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const d = R * c;
+
+          const empRadius = parseFloat(emp.allowed_radius) || 100;
+          if (d <= empRadius) { // Use the existing employee's allowed radius for collision
+            hasCollision = true;
+            collisionName = emp.full_name;
+            break;
+          }
+        }
+        
+        if (hasCollision) {
+          setAlertState({ isOpen: true, message: `Cannot save employee: The location conflicts with an existing employee (${collisionName}).`, type: 'error' });
+          setIsSaving(false);
+          return;
+        }
+      }
+
       const payload = {
         ...employeeFormData,
         latitude: selectedLocation.lat,
@@ -791,17 +848,22 @@ export default function MapDashboard({ user }) {
                 {/* 2x2 Picture */}
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Employee 2x2 Picture</label>
-                  <div className="border border-emerald-500/30 border-dashed bg-emerald-500/5 rounded-xl p-3 flex gap-3 h-[110px]">
-                    <div className="w-[84px] h-[84px] bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  <div 
+                    className="border border-emerald-500/30 border-dashed bg-emerald-500/5 rounded-xl p-3 flex gap-3 h-[110px] focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all cursor-pointer"
+                    tabIndex={0}
+                    onPaste={(e) => handlePaste(e, 'photo_url')}
+                  >
+                    <div className="w-[84px] h-[84px] bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden pointer-events-none">
                       {employeeFormData.photo_url ? (
                         <img src={employeeFormData.photo_url} alt="2x2" className="w-full h-full object-cover" />
                       ) : (
                         <span className="text-2xl font-black text-slate-600">2x2</span>
                       )}
                     </div>
-                    <div className="flex flex-col justify-center">
+                    <div className="flex flex-col justify-center pointer-events-none">
                       <span className="text-xs font-bold text-slate-300">2x2 Picture</span>
-                      <label className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer mt-2">
+                      <span className="text-[10px] text-slate-500 mt-0.5 leading-tight mb-2">Upload or paste 2x2 photo.</span>
+                      <label className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer pointer-events-auto">
                         {uploading.photo_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
                         <input type="file" accept="image/*" className="hidden" disabled={uploading.photo_url} onChange={(e) => handleFileUpload(e, 'photo_url')} />
                       </label>
@@ -812,18 +874,23 @@ export default function MapDashboard({ user }) {
                 {/* Kiosk Location Image */}
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Kiosk Location Image</label>
-                  <div className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50">
-                    <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden">
+                  <div 
+                    className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all cursor-pointer"
+                    tabIndex={0}
+                    onPaste={(e) => handlePaste(e, 'id_photo_url')}
+                  >
+                    <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden pointer-events-none">
                       {employeeFormData.id_photo_url ? (
                         <img src={employeeFormData.id_photo_url} alt="Kiosk" className="w-full h-full object-cover" />
                       ) : (
                         <Store size={24} />
                       )}
                     </div>
-                    <div className="flex flex-col justify-center">
-                      <span className="text-xs font-bold text-slate-300 mb-2">Kiosk Photo</span>
-                      <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer">
-                        {uploading.id_photo_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
+                    <div className="flex flex-col justify-center pointer-events-none">
+                      <span className="text-xs font-bold text-slate-300 mb-1">Kiosk Photo</span>
+                      <span className="text-[9px] text-slate-500 mb-2 leading-tight max-w-[80px]">Upload or paste photo</span>
+                      <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer pointer-events-auto">
+                        {uploading.id_photo_url ? '...' : <><Upload size={12} /> Upload</>}
                         <input type="file" accept="image/*" className="hidden" disabled={uploading.id_photo_url} onChange={(e) => handleFileUpload(e, 'id_photo_url')} />
                       </label>
                     </div>
@@ -833,18 +900,23 @@ export default function MapDashboard({ user }) {
                 {/* GPS Screenshot */}
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">GPS Screenshot</label>
-                  <div className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50">
-                    <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden">
+                  <div 
+                    className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all cursor-pointer"
+                    tabIndex={0}
+                    onPaste={(e) => handlePaste(e, 'coordinate_screenshot_url')}
+                  >
+                    <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden pointer-events-none">
                       {employeeFormData.coordinate_screenshot_url ? (
                         <img src={employeeFormData.coordinate_screenshot_url} alt="GPS" className="w-full h-full object-cover" />
                       ) : (
                         <MapPin size={24} />
                       )}
                     </div>
-                    <div className="flex flex-col justify-center">
-                      <span className="text-xs font-bold text-slate-300 leading-tight mb-2">GPS<br/>Screenshot</span>
-                      <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer">
-                        {uploading.coordinate_screenshot_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
+                    <div className="flex flex-col justify-center pointer-events-none">
+                      <span className="text-xs font-bold text-slate-300 leading-tight mb-1">GPS<br/>Screenshot</span>
+                      <span className="text-[9px] text-slate-500 mb-2 max-w-[80px]">Upload or paste</span>
+                      <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer pointer-events-auto">
+                        {uploading.coordinate_screenshot_url ? '...' : <><Upload size={12} /> Upload</>}
                         <input type="file" accept="image/*" className="hidden" disabled={uploading.coordinate_screenshot_url} onChange={(e) => handleFileUpload(e, 'coordinate_screenshot_url')} />
                       </label>
                     </div>
