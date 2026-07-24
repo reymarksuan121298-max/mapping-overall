@@ -26,6 +26,7 @@ export default function MapDashboard({ user }) {
     franchise_id: '',
     area_id: '',
     municipality_id: '',
+    contact_number: '',
     address: '',
     status: 'Active',
     photo_url: '',
@@ -326,6 +327,7 @@ export default function MapDashboard({ user }) {
         franchise_id: employeeFormData.franchise_id || null,
         area_id: employeeFormData.area_id || null,
         municipality_id: employeeFormData.municipality_id || null,
+        contact_number: employeeFormData.contact_number || null,
         photo_url: employeeFormData.photo_url || null,
         id_photo_url: employeeFormData.id_photo_url || null,
         coordinate_screenshot_url: employeeFormData.coordinate_screenshot_url || null
@@ -418,6 +420,7 @@ export default function MapDashboard({ user }) {
       franchise_id: user?.franchise_id ? user.franchise_id.toString() : '',
       area_id: '',
       municipality_id: '',
+      contact_number: '',
       address: '',
       status: 'Active',
       photo_url: '',
@@ -439,6 +442,7 @@ export default function MapDashboard({ user }) {
       franchise_id: kiosk.franchise_id || '',
       area_id: kiosk.area_id || '',
       municipality_id: kiosk.municipality_id || '',
+      contact_number: kiosk.contact_number || '',
       address: kiosk.address || '',
       status: kiosk.status || 'Active',
       photo_url: kiosk.photo_url || '',
@@ -715,6 +719,16 @@ export default function MapDashboard({ user }) {
                       onChange={(e) => setEmployeeFormData({...employeeFormData, full_name: e.target.value})}
                       className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
                       placeholder="e.g. Juan Dela Cruz"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Contact Number</label>
+                    <input
+                      type="text"
+                      value={employeeFormData.contact_number}
+                      onChange={(e) => setEmployeeFormData({...employeeFormData, contact_number: e.target.value})}
+                      className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                      placeholder="e.g. +639123456789"
                     />
                   </div>
                   <div>

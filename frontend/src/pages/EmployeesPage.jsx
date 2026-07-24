@@ -121,7 +121,7 @@ export default function EmployeesPage({ user }) {
           while (true) {
             const { data, error } = await supabase.from('employees').select(`
               id, employee_id, full_name, role, status, franchise_id, area_id, supervisor_id, municipality_id,
-              photo_url, id_photo_url, coordinate_screenshot_url, latitude, longitude,
+              photo_url, id_photo_url, coordinate_screenshot_url, latitude, longitude, contact_number, address,
               franchises (name),
               areas (name),
               supervisors (name, color)
