@@ -12,6 +12,7 @@ export default function EmployeesPage({ user }) {
   const [franchises, setFranchises] = useState([]);
   const [areas, setAreas] = useState([]);
   const [supervisors, setSupervisors] = useState([]);
+  const [municipalities, setMunicipalities] = useState([]);
   
   const [selectedFranchise, setSelectedFranchise] = useState(user?.franchise_id ? user.franchise_id.toString() : 'all');
   const [selectedArea, setSelectedArea] = useState('all');
@@ -108,17 +109,18 @@ export default function EmployeesPage({ user }) {
   const fetchEmployees = async () => {
     setLoading(true);
     try {
-      const [franchiseRes, areaRes, spvrRes, empRes] = await Promise.all([
+      const [franchiseRes, areaRes, spvrRes, muniRes, empRes] = await Promise.all([
         supabase.from('franchises').select('*'),
         supabase.from('areas').select('*'),
         supabase.from('supervisors').select('*'),
+        supabase.from('municipalities').select('*'),
         (async () => {
           let allData = [];
           let from = 0;
           let to = 999;
           while (true) {
             const { data, error } = await supabase.from('employees').select(`
-              id, employee_id, full_name, role, status, franchise_id, area_id, supervisor_id,
+              id, employee_id, full_name, role, status, franchise_id, area_id, supervisor_id, municipality_id,
               photo_url, id_photo_url, coordinate_screenshot_url, latitude, longitude,
               franchises (name),
               areas (name),
@@ -140,6 +142,7 @@ export default function EmployeesPage({ user }) {
 
       if (franchiseRes.data) setFranchises(franchiseRes.data);
       if (areaRes.data) setAreas(areaRes.data);
+      if (muniRes.data) setMunicipalities(muniRes.data);
 
       if (spvrRes.data) {
         const spvrData = user?.role === 'franchise_admin' 
@@ -780,6 +783,11 @@ export default function EmployeesPage({ user }) {
                         className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all appearance-none"
                       >
                         <option value="">None</option>
+                        {municipalities
+                          .filter(m => !formData.franchise_id || m.franchise_id?.toString() === formData.franchise_id?.toString())
+                          .map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
                       </select>
                     </div>
 
