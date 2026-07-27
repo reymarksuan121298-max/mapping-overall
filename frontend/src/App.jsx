@@ -11,7 +11,8 @@ import AreasPage from './pages/AreasPage';
 import MunicipalitiesPage from './pages/MunicipalitiesPage';
 import RealtimeMonitoringPage from './pages/RealtimeMonitoringPage';
 import LoginPage from './pages/LoginPage';
-
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 function App() {
   const [user, setUser] = React.useState(() => {
     const saved = localStorage.getItem('kiosk_user');
@@ -29,21 +30,28 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout user={user} onLogout={() => { localStorage.removeItem('kiosk_user'); setUser(null); }} />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPage user={user} />} />
-          <Route path="map" element={<MapDashboard user={user} />} />
-          <Route path="employees" element={<EmployeesPage user={user} />} />
-          <Route path="supervisors" element={<SupervisorsPage user={user} />} />
-          <Route path="franchises" element={<FranchisesPage user={user} />} />
-          <Route path="areas" element={<AreasPage user={user} />} />
-          <Route path="municipalities" element={<MunicipalitiesPage user={user} />} />
-          <Route path="realtime" element={<RealtimeMonitoringPage user={user} />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <>
+      <ToastContainer 
+        position="top-right" 
+        autoClose={3000} 
+        style={{ top: '110px', right: '40px' }} 
+      />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Layout user={user} onLogout={() => { localStorage.removeItem('kiosk_user'); setUser(null); }} />}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardPage user={user} />} />
+            <Route path="map" element={<MapDashboard user={user} />} />
+            <Route path="employees" element={<EmployeesPage user={user} />} />
+            <Route path="supervisors" element={<SupervisorsPage user={user} />} />
+            <Route path="franchises" element={<FranchisesPage user={user} />} />
+            <Route path="areas" element={<AreasPage user={user} />} />
+            <Route path="municipalities" element={<MunicipalitiesPage user={user} />} />
+            <Route path="realtime" element={<RealtimeMonitoringPage user={user} />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </>
   );
 }
 

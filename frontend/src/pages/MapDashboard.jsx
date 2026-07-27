@@ -4,6 +4,7 @@ import KioskMap from '../components/KioskMap';
 import { MapPin, Users, Activity, Filter, Layers, Map as MapIcon, Shield, X, Search, ChevronDown, UserPlus, Save, Upload, Store, AlertTriangle } from 'lucide-react';
 import AlertModal from '../components/AlertModal';
 import ConfirmModal from '../components/ConfirmModal';
+import { toast } from 'react-toastify';
 
 export default function MapDashboard({ user }) {
   const [employees, setEmployees] = useState([]);
@@ -355,7 +356,7 @@ export default function MapDashboard({ user }) {
       if (editingEmployeeId) {
         const { data, error } = await supabase.from('employees').update(payload).eq('id', editingEmployeeId).select();
         if (error) throw error;
-        setAlertState({ isOpen: true, message: 'Successfully updated employee!', type: 'success' });
+        toast.success('Successfully updated employee!');
         if (data && data.length > 0) {
           setAutoOpenEmployeeId(data[0].id);
           setTimeout(() => setAutoOpenEmployeeId(null), 1000);
@@ -363,7 +364,7 @@ export default function MapDashboard({ user }) {
       } else {
         const { data, error } = await supabase.from('employees').insert([payload]).select();
         if (error) throw error;
-        setAlertState({ isOpen: true, message: 'Successfully added employee!', type: 'success' });
+        toast.success('Successfully added employee!');
         if (data && data.length > 0) {
           setAutoOpenEmployeeId(data[0].id);
           setTimeout(() => setAutoOpenEmployeeId(null), 1000);
@@ -475,14 +476,18 @@ export default function MapDashboard({ user }) {
       message: `Are you sure you want to delete ${kiosk.full_name}?`,
       onConfirm: async () => {
         setConfirmState(prev => ({ ...prev, isOpen: false }));
+        
+        // Optimistic UI Update: Instantly remove the deleted employee from the map
+        setEmployees(prev => prev.filter(e => e.id !== kiosk.id));
+
         try {
           const { error } = await supabase.from('employees').delete().eq('id', kiosk.id);
           if (error) throw error;
-          setAlertState({ isOpen: true, message: 'Successfully deleted employee!', type: 'success' });
-          fetchData(); // Refresh data
+          toast.success('Successfully deleted employee!');
         } catch (err) {
           console.error('Error deleting employee:', err.message);
           setAlertState({ isOpen: true, message: 'Failed to delete employee.', type: 'error' });
+          fetchData(); // Revert on error
         }
       }
     });
@@ -497,14 +502,18 @@ export default function MapDashboard({ user }) {
       message: `Are you sure you want to ${actionText} ${kiosk.full_name}?`,
       onConfirm: async () => {
         setConfirmState(prev => ({ ...prev, isOpen: false }));
+        
+        // Optimistic UI Update: Instantly remove the deactivated employee from the map
+        setEmployees(prev => prev.filter(e => e.id !== kiosk.id));
+
         try {
           const { error } = await supabase.from('employees').update({ status: newStatus }).eq('id', kiosk.id);
           if (error) throw error;
-          setAlertState({ isOpen: true, message: `Successfully ${actionText}d employee!`, type: 'success' });
-          fetchData(); // Refresh data
+          toast.success(`Successfully ${actionText}d employee!`);
         } catch (err) {
           console.error(`Error ${actionText}ing employee:`, err.message);
-          setAlertState({ isOpen: true, message: `Failed to ${actionText} employee.`, type: 'error' });
+          toast.error(`Failed to ${actionText} employee.`);
+          fetchData(); // Revert on error
         }
       }
     });

@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { UserCog, Search, Filter, Plus, Edit2, Trash2, X } from 'lucide-react';
 import AlertModal from '../components/AlertModal';
 import ConfirmModal from '../components/ConfirmModal';
+import { toast } from 'react-toastify';
 
 export default function SupervisorsPage({ user }) {
   const [supervisors, setSupervisors] = useState([]);
@@ -134,7 +135,7 @@ export default function SupervisorsPage({ user }) {
         try {
           const { error } = await supabase.from('supervisors').delete().eq('id', item.id);
           if (error) throw error;
-          setAlertState({ isOpen: true, message: 'Successfully deleted supervisor!', type: 'success' });
+          toast.success('Successfully deleted supervisor!');
           fetchSupervisors();
         } catch (err) {
           console.error('Error deleting supervisor:', err.message);
@@ -171,7 +172,7 @@ export default function SupervisorsPage({ user }) {
           const { error } = await supabase.from('supervisors').delete().in('id', selectedIds);
           if (error) throw error;
           setSelectedIds([]);
-          setAlertState({ isOpen: true, message: 'Successfully deleted supervisors!', type: 'success' });
+          toast.success('Successfully deleted supervisors!');
           fetchSupervisors();
         } catch (err) {
           console.error('Error deleting supervisors:', err.message);
@@ -193,11 +194,11 @@ export default function SupervisorsPage({ user }) {
       if (modalMode === 'add') {
         const { error } = await supabase.from('supervisors').insert([payload]);
         if (error) throw error;
-        setAlertState({ isOpen: true, message: 'Successfully added supervisor!', type: 'success' });
+        toast.success('Successfully added supervisor!');
       } else {
         const { error } = await supabase.from('supervisors').update(payload).eq('id', editingId);
         if (error) throw error;
-        setAlertState({ isOpen: true, message: 'Successfully updated supervisor!', type: 'success' });
+        toast.success('Successfully updated supervisor!');
       }
       setIsModalOpen(false);
       fetchSupervisors();

@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { Users, Search, Filter, Plus, Edit2, Trash2, X, Upload, Store, MapPin, AlertTriangle, UserCheck, UserX } from 'lucide-react';
 import AlertModal from '../components/AlertModal';
 import ConfirmModal from '../components/ConfirmModal';
+import { toast } from 'react-toastify';
 
 export default function EmployeesPage({ user }) {
   const [employees, setEmployees] = useState([]);
@@ -231,14 +232,18 @@ export default function EmployeesPage({ user }) {
       message: 'Are you sure you want to delete this employee?',
       onConfirm: async () => {
         setConfirmState(prev => ({ ...prev, isOpen: false }));
+        
+        // Optimistic UI Update
+        setEmployees(prev => prev.filter(e => e.id !== id));
+
         try {
           const { error } = await supabase.from('employees').delete().eq('id', id);
           if (error) throw error;
-          setAlertState({ isOpen: true, message: 'Successfully deleted employee!', type: 'success' });
-          fetchEmployees();
+          toast.success('Successfully deleted employee!');
         } catch (err) {
           console.error('Error deleting employee:', err.message);
           setAlertState({ isOpen: true, message: 'Failed to delete employee.', type: 'error' });
+          fetchEmployees(); // Revert on error
         }
       }
     });
@@ -253,14 +258,18 @@ export default function EmployeesPage({ user }) {
       message: `Are you sure you want to ${actionText} this employee?`,
       onConfirm: async () => {
         setConfirmState(prev => ({ ...prev, isOpen: false }));
+        
+        // Optimistic UI Update: Instantly update the employee status
+        setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, status: newStatus } : e));
+
         try {
           const { error } = await supabase.from('employees').update({ status: newStatus }).eq('id', emp.id);
           if (error) throw error;
-          setAlertState({ isOpen: true, message: `Successfully ${actionText}d employee!`, type: 'success' });
-          fetchEmployees();
+          toast.success(`Successfully ${actionText}d employee!`);
         } catch (err) {
           console.error(`Error ${actionText}ing employee:`, err.message);
-          setAlertState({ isOpen: true, message: `Failed to ${actionText} employee.`, type: 'error' });
+          toast.error(`Failed to ${actionText} employee.`);
+          fetchEmployees(); // Revert on error
         }
       }
     });
@@ -438,11 +447,11 @@ export default function EmployeesPage({ user }) {
       if (modalMode === 'add') {
         const { error: insertError } = await supabase.from('employees').insert([payload]);
         if (insertError) throw insertError;
-        setAlertState({ isOpen: true, message: 'Successfully added employee!', type: 'success' });
+        toast.success('Successfully added employee!');
       } else {
         const { error: updateError } = await supabase.from('employees').update(payload).eq('id', editingId);
         if (updateError) throw updateError;
-        setAlertState({ isOpen: true, message: 'Successfully updated employee!', type: 'success' });
+        toast.success('Successfully updated employee!');
       }
       setIsModalOpen(false);
       fetchEmployees();
