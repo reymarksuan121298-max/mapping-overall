@@ -334,11 +334,11 @@ export default function EmployeesPage({ user }) {
     }
   };
 
-  const handleSave = async (e) => {
-    e.preventDefault();
+  const handleSave = async (e, bypassCollision = false) => {
+    if (e) e.preventDefault();
     try {
       // Check for employee location collision
-      if (formData.latitude && formData.longitude) {
+      if (!bypassCollision && formData.latitude && formData.longitude) {
         const R = 6371e3; // metres
         const lat1 = parseFloat(formData.latitude);
         const lon1 = parseFloat(formData.longitude);
@@ -372,7 +372,15 @@ export default function EmployeesPage({ user }) {
         }
         
         if (hasCollision) {
-          setAlertState({ isOpen: true, message: `Cannot save employee: The location conflicts with an existing employee (${collisionName}).`, type: 'error' });
+          setAlertState({ 
+            isOpen: true, 
+            message: `Cannot save employee: The location conflicts with an existing employee (${collisionName}).`, 
+            type: 'error',
+            onProceed: () => {
+              setAlertState({ isOpen: false });
+              handleSave(null, true);
+            }
+          });
           return;
         }
       }
@@ -544,6 +552,7 @@ export default function EmployeesPage({ user }) {
           message={alertState.message} 
           type={alertState.type} 
           onClose={() => setAlertState({ ...alertState, isOpen: false })} 
+          onProceed={alertState.onProceed}
         />
         <ConfirmModal 
           isOpen={confirmState.isOpen} 

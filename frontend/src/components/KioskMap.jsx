@@ -101,7 +101,7 @@ const MAP_LAYERS = {
   }
 };
 
-const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLocationSelected, isFiltered, onEditEmployee, onDeleteEmployee, supervisorLocations = [] }) {
+const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLocationSelected, isFiltered, onEditEmployee, onDeleteEmployee, supervisorLocations = [], autoOpenEmployeeId }) {
   const [activeLayer, setActiveLayer] = useState('street');
   const [isLayerMenuOpen, setIsLayerMenuOpen] = useState(false);
 
@@ -129,6 +129,14 @@ const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLoca
           key={`marker-${kiosk.id}`}
           position={[kiosk.latitude, kiosk.longitude]}
           icon={createCustomIcon(spvrColor)}
+          ref={(m) => {
+            if (m && autoOpenEmployeeId === kiosk.id) {
+              // Add a slight delay to ensure the marker is fully rendered before opening the popup
+              setTimeout(() => {
+                m.openPopup();
+              }, 100);
+            }
+          }}
         >
           <Popup minWidth={360}>
             <div className="p-4 min-w-[360px] bg-slate-900 rounded-xl">
@@ -228,7 +236,7 @@ const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLoca
         </Marker>
       );
     });
-  }, [kiosks]);
+  }, [kiosks, autoOpenEmployeeId]);
 
   // Center roughly on Mindanao, Philippines
   const defaultCenter = [7.9, 124.0];

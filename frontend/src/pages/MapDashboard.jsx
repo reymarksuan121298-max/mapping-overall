@@ -49,6 +49,7 @@ export default function MapDashboard({ user }) {
   const [selectedSupervisor, setSelectedSupervisor] = useState('all');
   const [isTacticalOpen, setIsTacticalOpen] = useState(false);
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
+  const [autoOpenEmployeeId, setAutoOpenEmployeeId] = useState(null);
   const [alertState, setAlertState] = useState({ isOpen: false, message: '', type: 'error' });
   const [confirmState, setConfirmState] = useState({ isOpen: false, message: '', onConfirm: null });
 
@@ -272,14 +273,14 @@ export default function MapDashboard({ user }) {
     }
   };
 
-  const handleSaveEmployee = async (e) => {
-    e.preventDefault();
+  const handleSaveEmployee = async (e, bypassCollision = false) => {
+    if (e) e.preventDefault();
     if (!selectedLocation) return;
     
     setIsSaving(true);
     try {
       // Check for employee location collision
-      if (selectedLocation.lat && selectedLocation.lng) {
+      if (!bypassCollision && selectedLocation.lat && selectedLocation.lng) {
         const R = 6371e3; // metres
         const lat1 = parseFloat(selectedLocation.lat);
         const lon1 = parseFloat(selectedLocation.lng);
@@ -313,7 +314,15 @@ export default function MapDashboard({ user }) {
         }
         
         if (hasCollision) {
-          setAlertState({ isOpen: true, message: `Cannot save employee: The location conflicts with an existing employee (${collisionName}).`, type: 'error' });
+          setAlertState({ 
+            isOpen: true, 
+            message: `Cannot save employee: The location conflicts with an existing employee (${collisionName}).`, 
+            type: 'error',
+            onProceed: () => {
+              setAlertState({ isOpen: false });
+              handleSaveEmployee(null, true);
+            }
+          });
           setIsSaving(false);
           return;
         }
@@ -344,13 +353,21 @@ export default function MapDashboard({ user }) {
       }
 
       if (editingEmployeeId) {
-        const { error } = await supabase.from('employees').update(payload).eq('id', editingEmployeeId);
+        const { data, error } = await supabase.from('employees').update(payload).eq('id', editingEmployeeId).select();
         if (error) throw error;
         setAlertState({ isOpen: true, message: 'Successfully updated employee!', type: 'success' });
+        if (data && data.length > 0) {
+          setAutoOpenEmployeeId(data[0].id);
+          setTimeout(() => setAutoOpenEmployeeId(null), 1000);
+        }
       } else {
-        const { error } = await supabase.from('employees').insert([payload]);
+        const { data, error } = await supabase.from('employees').insert([payload]).select();
         if (error) throw error;
         setAlertState({ isOpen: true, message: 'Successfully added employee!', type: 'success' });
+        if (data && data.length > 0) {
+          setAutoOpenEmployeeId(data[0].id);
+          setTimeout(() => setAutoOpenEmployeeId(null), 1000);
+        }
       }
       
       setIsEmployeeModalOpen(false);
@@ -488,6 +505,7 @@ export default function MapDashboard({ user }) {
           kiosks={filteredEmployees} 
           isFiltered={selectedFranchise !== 'all' || selectedArea !== 'all' || selectedSupervisor !== 'all' || searchTerm !== ''}
           isAddingEmployee={isAddingEmployee} 
+          autoOpenEmployeeId={autoOpenEmployeeId}
           onLocationSelected={handleLocationSelected}
           onEditEmployee={handleEditEmployee}
           onDeleteEmployee={handleDeleteEmployee}
@@ -962,6 +980,7 @@ export default function MapDashboard({ user }) {
         message={alertState.message} 
         type={alertState.type} 
         onClose={() => setAlertState({ ...alertState, isOpen: false })} 
+        onProceed={alertState.onProceed}
       />
       <ConfirmModal 
         isOpen={confirmState.isOpen} 
