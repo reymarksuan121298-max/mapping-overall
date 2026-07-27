@@ -149,7 +149,7 @@ export default function MapDashboard({ user }) {
               franchises (name),
               areas (name),
               supervisors (name, color)
-            `).range(from, to);
+            `).eq('status', 'Active').range(from, to);
             
             if (error) return { error };
             if (!data || data.length === 0) break;
@@ -488,6 +488,28 @@ export default function MapDashboard({ user }) {
     });
   };
 
+  const handleToggleStatus = (kiosk) => {
+    const newStatus = kiosk.status === 'Active' ? 'Inactive' : 'Active';
+    const actionText = newStatus === 'Active' ? 'activate' : 'deactivate';
+    
+    setConfirmState({
+      isOpen: true,
+      message: `Are you sure you want to ${actionText} ${kiosk.full_name}?`,
+      onConfirm: async () => {
+        setConfirmState(prev => ({ ...prev, isOpen: false }));
+        try {
+          const { error } = await supabase.from('employees').update({ status: newStatus }).eq('id', kiosk.id);
+          if (error) throw error;
+          setAlertState({ isOpen: true, message: `Successfully ${actionText}d employee!`, type: 'success' });
+          fetchData(); // Refresh data
+        } catch (err) {
+          console.error(`Error ${actionText}ing employee:`, err.message);
+          setAlertState({ isOpen: true, message: `Failed to ${actionText} employee.`, type: 'error' });
+        }
+      }
+    });
+  };
+
   return (
     <div className="flex-1 flex flex-col relative h-full w-full bg-slate-900">
       
@@ -509,6 +531,7 @@ export default function MapDashboard({ user }) {
           onLocationSelected={handleLocationSelected}
           onEditEmployee={handleEditEmployee}
           onDeleteEmployee={handleDeleteEmployee}
+          onToggleStatus={handleToggleStatus}
         />
       </div>
 

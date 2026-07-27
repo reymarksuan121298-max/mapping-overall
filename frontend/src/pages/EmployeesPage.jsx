@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Users, Search, Filter, Plus, Edit2, Trash2, X, Upload, Store, MapPin, AlertTriangle } from 'lucide-react';
+import { Users, Search, Filter, Plus, Edit2, Trash2, X, Upload, Store, MapPin, AlertTriangle, UserCheck, UserX } from 'lucide-react';
 import AlertModal from '../components/AlertModal';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -239,6 +239,28 @@ export default function EmployeesPage({ user }) {
         } catch (err) {
           console.error('Error deleting employee:', err.message);
           setAlertState({ isOpen: true, message: 'Failed to delete employee.', type: 'error' });
+        }
+      }
+    });
+  };
+
+  const handleToggleStatus = (emp) => {
+    const newStatus = emp.status === 'Active' ? 'Inactive' : 'Active';
+    const actionText = newStatus === 'Active' ? 'activate' : 'deactivate';
+    
+    setConfirmState({
+      isOpen: true,
+      message: `Are you sure you want to ${actionText} this employee?`,
+      onConfirm: async () => {
+        setConfirmState(prev => ({ ...prev, isOpen: false }));
+        try {
+          const { error } = await supabase.from('employees').update({ status: newStatus }).eq('id', emp.id);
+          if (error) throw error;
+          setAlertState({ isOpen: true, message: `Successfully ${actionText}d employee!`, type: 'success' });
+          fetchEmployees();
+        } catch (err) {
+          console.error(`Error ${actionText}ing employee:`, err.message);
+          setAlertState({ isOpen: true, message: `Failed to ${actionText} employee.`, type: 'error' });
         }
       }
     });
@@ -619,6 +641,9 @@ export default function EmployeesPage({ user }) {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2 opacity-100 transition-opacity">
+                          <button onClick={() => handleToggleStatus(emp)} className={`p-2 hover:bg-slate-700 rounded-lg transition-colors ${emp.status === 'Active' ? 'text-slate-400 hover:text-amber-400' : 'text-slate-400 hover:text-emerald-400'}`} title={emp.status === 'Active' ? 'Deactivate Employee' : 'Activate Employee'}>
+                            {emp.status === 'Active' ? <UserX size={16} /> : <UserCheck size={16} />}
+                          </button>
                           <button onClick={() => openEditModal(emp)} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-blue-400 transition-colors">
                             <Edit2 size={16} />
                           </button>
