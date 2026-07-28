@@ -16,6 +16,8 @@ export default function Sidebar({ user, onLogout, setIsSidebarOpen }) {
 
   if (user?.role === 'franchise_admin') {
     navItems = navItems.filter(item => item.name !== 'Franchises' && item.name !== 'Municipalities');
+  } else if (user?.role === 'viewer') {
+    navItems = navItems.filter(item => item.name === 'Live Map');
   }
 
   return (

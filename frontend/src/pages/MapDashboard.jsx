@@ -168,14 +168,14 @@ export default function MapDashboard({ user }) {
       ]);
 
       let fData = franchiseRes.data || [];
-      if (user?.role === 'franchise_admin') {
+      if (user?.role === 'franchise_admin' || (user?.role === 'viewer' && user?.franchise_id)) {
         fData = fData.filter(f => f.id === user.franchise_id);
       }
       setFranchises(fData);
       
       if (areaRes.data) setAreas(areaRes.data);
       let supervisorsData = spvrRes.data || [];
-      if (user?.role === 'franchise_admin') {
+      if (user?.role === 'franchise_admin' || (user?.role === 'viewer' && user?.franchise_id)) {
         supervisorsData = supervisorsData.filter(s => s.franchise_id === user.franchise_id);
       }
       setSupervisors(supervisorsData);
@@ -183,7 +183,7 @@ export default function MapDashboard({ user }) {
       if (muniRes.data) setMunicipalities(muniRes.data);
       
       let locData = locRes.data || [];
-      if (user?.role === 'franchise_admin') {
+      if (user?.role === 'franchise_admin' || (user?.role === 'viewer' && user?.franchise_id)) {
         const allowedSupervisorIds = new Set(supervisorsData.map(s => s.id));
         locData = locData.filter(l => allowedSupervisorIds.has(l.supervisor_id));
       }
@@ -192,7 +192,7 @@ export default function MapDashboard({ user }) {
       if (employeeRes.error) throw employeeRes.error;
       
       let empData = employeeRes.data || [];
-      if (user?.role === 'franchise_admin') {
+      if (user?.role === 'franchise_admin' || (user?.role === 'viewer' && user?.franchise_id)) {
         empData = empData.filter(e => e.franchise_id === user.franchise_id);
       }
       setEmployees(empData);
@@ -538,14 +538,14 @@ export default function MapDashboard({ user }) {
           isAddingEmployee={isAddingEmployee} 
           autoOpenEmployeeId={autoOpenEmployeeId}
           onLocationSelected={handleLocationSelected}
-          onEditEmployee={handleEditEmployee}
-          onDeleteEmployee={handleDeleteEmployee}
-          onToggleStatus={handleToggleStatus}
+          onEditEmployee={user?.role !== 'viewer' ? handleEditEmployee : undefined}
+          onDeleteEmployee={user?.role !== 'viewer' ? handleDeleteEmployee : undefined}
+          onToggleStatus={user?.role !== 'viewer' ? handleToggleStatus : undefined}
         />
       </div>
 
       {/* ADD EMP Button */}
-      {!isAddingEmployee && (
+      {!isAddingEmployee && user?.role !== 'viewer' && (
         <button 
           onClick={() => setIsAddingEmployee(true)}
           className="absolute top-20 right-6 z-[1000] bg-slate-900/90 backdrop-blur-md border-[3px] border-emerald-500/50 hover:border-emerald-400 text-emerald-400 px-4 py-2.5 rounded-2xl flex items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all group"
@@ -579,8 +579,8 @@ export default function MapDashboard({ user }) {
           onClick={() => setIsTacticalOpen(true)}
           className="absolute top-6 right-6 z-[1000] bg-slate-900/90 backdrop-blur-md border-[3px] border-emerald-500/50 hover:border-emerald-400 text-emerald-400 px-4 py-2.5 rounded-2xl flex items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all group"
         >
-          <Shield size={20} className="group-hover:scale-110 transition-transform" />
-          <span className="font-black text-[11px] tracking-widest">TACTICAL</span>
+          {user?.role === 'viewer' ? <Filter size={20} className="group-hover:scale-110 transition-transform" /> : <Shield size={20} className="group-hover:scale-110 transition-transform" />}
+          <span className="font-black text-[11px] tracking-widest">{user?.role === 'viewer' ? 'FILTERS' : 'TACTICAL'}</span>
         </button>
       )}
 
@@ -597,9 +597,9 @@ export default function MapDashboard({ user }) {
           <div className="p-6 border-b border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
-                <Shield size={20} />
+                {user?.role === 'viewer' ? <Filter size={20} /> : <Shield size={20} />}
               </div>
-              <h2 className="text-lg font-black tracking-widest text-slate-100">TACTICAL VIEW</h2>
+              <h2 className="text-lg font-black tracking-widest text-slate-100">{user?.role === 'viewer' ? 'FILTERS' : 'TACTICAL VIEW'}</h2>
             </div>
             <button 
               onClick={() => setIsTacticalOpen(false)}
