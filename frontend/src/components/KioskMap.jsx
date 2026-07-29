@@ -101,7 +101,7 @@ const MAP_LAYERS = {
   }
 };
 
-const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLocationSelected, isFiltered, onEditEmployee, onDeleteEmployee, supervisorLocations = [] }) {
+const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLocationSelected, isFiltered, onEditEmployee, onDeleteEmployee, onToggleStatus, supervisorLocations = [], autoOpenEmployeeId }) {
   const [activeLayer, setActiveLayer] = useState('street');
   const [isLayerMenuOpen, setIsLayerMenuOpen] = useState(false);
 
@@ -129,6 +129,14 @@ const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLoca
           key={`marker-${kiosk.id}`}
           position={[kiosk.latitude, kiosk.longitude]}
           icon={createCustomIcon(spvrColor)}
+          ref={(m) => {
+            if (m && autoOpenEmployeeId === kiosk.id) {
+              // Add a slight delay to ensure the marker is fully rendered before opening the popup
+              setTimeout(() => {
+                m.openPopup();
+              }, 100);
+            }
+          }}
         >
           <Popup minWidth={360}>
             <div className="p-4 min-w-[360px] bg-slate-900 rounded-xl">
@@ -142,11 +150,13 @@ const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLoca
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${
-                      kiosk.status === 'Active' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                  <button 
+                    onClick={() => onToggleStatus && onToggleStatus(kiosk)}
+                    className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest cursor-pointer transition-all hover:scale-105 ${
+                      kiosk.status === 'Active' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-rose-500/30'
                     }`}>
                     {kiosk.status || 'Unknown'}
-                  </span>
+                  </button>
                   <div className="flex items-center gap-3">
                     {onEditEmployee && (
                       <button 
@@ -228,7 +238,7 @@ const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLoca
         </Marker>
       );
     });
-  }, [kiosks]);
+  }, [kiosks, autoOpenEmployeeId]);
 
   // Center roughly on Mindanao, Philippines
   const defaultCenter = [7.9, 124.0];

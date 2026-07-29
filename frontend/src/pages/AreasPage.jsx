@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { MapPin, Search, Filter, Plus, Edit2, Trash2, X } from 'lucide-react';
 import AlertModal from '../components/AlertModal';
 import ConfirmModal from '../components/ConfirmModal';
+import { toast } from 'react-toastify';
 
 export default function AreasPage() {
   const [areas, setAreas] = useState([]);
@@ -73,7 +74,7 @@ export default function AreasPage() {
         try {
           const { error } = await supabase.from('areas').delete().eq('id', id);
           if (error) throw error;
-          setAlertState({ isOpen: true, message: 'Successfully deleted area!', type: 'success' });
+          toast.success('Successfully deleted area!');
           fetchAreas();
         } catch (err) {
           console.error('Error deleting area:', err.message);
@@ -93,11 +94,11 @@ export default function AreasPage() {
       if (modalMode === 'add') {
         const { error } = await supabase.from('areas').insert([payload]);
         if (error) throw error;
-        setAlertState({ isOpen: true, message: 'Successfully added area!', type: 'success' });
+        toast.success('Successfully added area!');
       } else {
         const { error } = await supabase.from('areas').update(payload).eq('id', editingId);
         if (error) throw error;
-        setAlertState({ isOpen: true, message: 'Successfully updated area!', type: 'success' });
+        toast.success('Successfully updated area!');
       }
       setIsModalOpen(false);
       fetchAreas();

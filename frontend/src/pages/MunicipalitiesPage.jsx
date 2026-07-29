@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { LandPlot, Search, Filter, Plus, Edit2, Trash2, X } from 'lucide-react';
 import AlertModal from '../components/AlertModal';
 import ConfirmModal from '../components/ConfirmModal';
+import { toast } from 'react-toastify';
 
 export default function MunicipalitiesPage() {
   const [municipalities, setMunicipalities] = useState([]);
@@ -73,7 +74,7 @@ export default function MunicipalitiesPage() {
         try {
           const { error } = await supabase.from('municipalities').delete().eq('id', id);
           if (error) throw error;
-          setAlertState({ isOpen: true, message: 'Successfully deleted municipality!', type: 'success' });
+          toast.success('Successfully deleted municipality!');
           fetchMunicipalities();
         } catch (err) {
           console.error('Error deleting municipality:', err.message);
@@ -93,11 +94,11 @@ export default function MunicipalitiesPage() {
       if (modalMode === 'add') {
         const { error } = await supabase.from('municipalities').insert([payload]);
         if (error) throw error;
-        setAlertState({ isOpen: true, message: 'Successfully added municipality!', type: 'success' });
+        toast.success('Successfully added municipality!');
       } else {
         const { error } = await supabase.from('municipalities').update(payload).eq('id', editingId);
         if (error) throw error;
-        setAlertState({ isOpen: true, message: 'Successfully updated municipality!', type: 'success' });
+        toast.success('Successfully updated municipality!');
       }
       setIsModalOpen(false);
       fetchMunicipalities();

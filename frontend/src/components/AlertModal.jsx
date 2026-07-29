@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle, X } from 'lucide-react';
 
-export default function AlertModal({ isOpen, message, type = 'error', onClose }) {
+export default function AlertModal({ isOpen, message, type = 'error', onClose, onProceed, proceedText = 'Proceed Anyway' }) {
   if (!isOpen) return null;
   
   const isError = type === 'error';
@@ -37,6 +37,14 @@ export default function AlertModal({ isOpen, message, type = 'error', onClose })
         >
           {isError ? 'Understood' : 'Okay'}
         </button>
+        {onProceed && (
+          <button
+            onClick={onProceed}
+            className="w-full mt-3 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl transition-colors"
+          >
+            {proceedText}
+          </button>
+        )}
       </div>
     </div>
   );

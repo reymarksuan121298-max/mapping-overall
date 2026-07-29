@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { UserCog, Search, Filter, Plus, Edit2, Trash2, X } from 'lucide-react';
 import AlertModal from '../components/AlertModal';
 import ConfirmModal from '../components/ConfirmModal';
+import { toast } from 'react-toastify';
 
 export default function SupervisorsPage({ user }) {
   const [supervisors, setSupervisors] = useState([]);
@@ -12,6 +13,22 @@ export default function SupervisorsPage({ user }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [alertState, setAlertState] = useState({ isOpen: false, message: '', type: 'error' });
   const [confirmState, setConfirmState] = useState({ isOpen: false, message: '', onConfirm: null });
+
+  const [selectedFranchiseFilter, setSelectedFranchiseFilter] = useState('all');
+  const [showFilters, setShowFilters] = useState(false);
+  const filterRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (filterRef.current && !filterRef.current.contains(event.target)) {
+        setShowFilters(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
@@ -89,9 +106,11 @@ export default function SupervisorsPage({ user }) {
     }
   };
 
-  const filteredSupervisors = supervisors.filter(spvr => 
-    spvr.name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredSupervisors = supervisors.filter(spvr => {
+    const matchesSearch = spvr.name?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesFranchise = selectedFranchiseFilter === 'all' || (spvr.franchise_id || spvr.franchise)?.toString() === selectedFranchiseFilter;
+    return matchesSearch && matchesFranchise;
+  });
 
   const openAddModal = () => {
     setModalMode('add');
@@ -116,7 +135,7 @@ export default function SupervisorsPage({ user }) {
         try {
           const { error } = await supabase.from('supervisors').delete().eq('id', item.id);
           if (error) throw error;
-          setAlertState({ isOpen: true, message: 'Successfully deleted supervisor!', type: 'success' });
+          toast.success('Successfully deleted supervisor!');
           fetchSupervisors();
         } catch (err) {
           console.error('Error deleting supervisor:', err.message);
@@ -153,7 +172,7 @@ export default function SupervisorsPage({ user }) {
           const { error } = await supabase.from('supervisors').delete().in('id', selectedIds);
           if (error) throw error;
           setSelectedIds([]);
-          setAlertState({ isOpen: true, message: 'Successfully deleted supervisors!', type: 'success' });
+          toast.success('Successfully deleted supervisors!');
           fetchSupervisors();
         } catch (err) {
           console.error('Error deleting supervisors:', err.message);
@@ -175,11 +194,11 @@ export default function SupervisorsPage({ user }) {
       if (modalMode === 'add') {
         const { error } = await supabase.from('supervisors').insert([payload]);
         if (error) throw error;
-        setAlertState({ isOpen: true, message: 'Successfully added supervisor!', type: 'success' });
+        toast.success('Successfully added supervisor!');
       } else {
         const { error } = await supabase.from('supervisors').update(payload).eq('id', editingId);
         if (error) throw error;
-        setAlertState({ isOpen: true, message: 'Successfully updated supervisor!', type: 'success' });
+        toast.success('Successfully updated supervisor!');
       }
       setIsModalOpen(false);
       fetchSupervisors();
@@ -224,9 +243,37 @@ export default function SupervisorsPage({ user }) {
                 <Trash2 size={16} /> Delete Selected ({selectedIds.length})
               </button>
             )}
-            <button className="bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-inner">
-              <Filter size={16} /> Filter
-            </button>
+            <div className="relative" ref={filterRef}>
+              <button 
+                onClick={() => setShowFilters(!showFilters)}
+                className={`border hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-inner ${showFilters ? 'bg-slate-700 border-slate-600' : 'bg-slate-800 border-slate-700'}`}
+              >
+                <Filter size={16} className={showFilters ? 'text-teal-400' : ''} /> Filter
+              </button>
+
+              {/* Filter Popover */}
+              {showFilters && (
+                <div className="absolute top-full right-0 mt-2 w-72 bg-slate-800 border border-slate-700 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] z-50 p-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="space-y-4">
+                    {(!user || !user.franchise_id) && (
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Franchise</label>
+                        <select 
+                          className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none p-2 cursor-pointer"
+                          value={selectedFranchiseFilter}
+                          onChange={(e) => setSelectedFranchiseFilter(e.target.value)}
+                        >
+                          <option value="all">All Franchises</option>
+                          {franchises.map(f => (
+                            <option key={f.id} value={f.id}>{f.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <button onClick={openAddModal} className="bg-teal-500 hover:bg-teal-400 text-slate-900 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-[0_0_15px_rgba(20,184,166,0.3)]">
               <Plus size={16} /> Add Supervisor
             </button>

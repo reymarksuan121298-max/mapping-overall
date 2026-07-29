@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { Building2, Search, Filter, Plus, Edit2, Trash2, X } from 'lucide-react';
 import AlertModal from '../components/AlertModal';
 import ConfirmModal from '../components/ConfirmModal';
+import { toast } from 'react-toastify';
 
 export default function FranchisesPage() {
   const [franchises, setFranchises] = useState([]);
@@ -73,7 +74,7 @@ export default function FranchisesPage() {
         try {
           const { error } = await supabase.from('franchises').delete().eq('id', id);
           if (error) throw error;
-          setAlertState({ isOpen: true, message: 'Successfully deleted franchise!', type: 'success' });
+          toast.success('Successfully deleted franchise!');
           fetchFranchises();
         } catch (err) {
           console.error('Error deleting franchise:', err.message);
@@ -93,11 +94,11 @@ export default function FranchisesPage() {
       if (modalMode === 'add') {
         const { error } = await supabase.from('franchises').insert([payload]);
         if (error) throw error;
-        setAlertState({ isOpen: true, message: 'Successfully added franchise!', type: 'success' });
+        toast.success('Successfully added franchise!');
       } else {
         const { error } = await supabase.from('franchises').update(payload).eq('id', editingId);
         if (error) throw error;
-        setAlertState({ isOpen: true, message: 'Successfully updated franchise!', type: 'success' });
+        toast.success('Successfully updated franchise!');
       }
       setIsModalOpen(false);
       fetchFranchises();

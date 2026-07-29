@@ -4,6 +4,7 @@ import KioskMap from '../components/KioskMap';
 import { MapPin, Users, Activity, Filter, Layers, Map as MapIcon, Shield, X, Search, ChevronDown, UserPlus, Save, Upload, Store, AlertTriangle } from 'lucide-react';
 import AlertModal from '../components/AlertModal';
 import ConfirmModal from '../components/ConfirmModal';
+import { toast } from 'react-toastify';
 
 export default function MapDashboard({ user }) {
   const [employees, setEmployees] = useState([]);
@@ -26,6 +27,7 @@ export default function MapDashboard({ user }) {
     franchise_id: '',
     area_id: '',
     municipality_id: '',
+    contact_number: '',
     address: '',
     status: 'Active',
     photo_url: '',
@@ -43,11 +45,12 @@ export default function MapDashboard({ user }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedFranchise, setSelectedFranchise] = useState(user?.franchise_id ? user.franchise_id.toString() : 'all');
-  const [selectedArea, setSelectedArea] = useState('all');
+  const [selectedAreas, setSelectedAreas] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedSupervisor, setSelectedSupervisor] = useState('all');
   const [isTacticalOpen, setIsTacticalOpen] = useState(false);
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
+  const [autoOpenEmployeeId, setAutoOpenEmployeeId] = useState(null);
   const [alertState, setAlertState] = useState({ isOpen: false, message: '', type: 'error' });
   const [confirmState, setConfirmState] = useState({ isOpen: false, message: '', onConfirm: null });
 
@@ -147,7 +150,7 @@ export default function MapDashboard({ user }) {
               franchises (name),
               areas (name),
               supervisors (name, color)
-            `).range(from, to);
+            `).eq('status', 'Active').range(from, to);
             
             if (error) return { error };
             if (!data || data.length === 0) break;
@@ -165,14 +168,14 @@ export default function MapDashboard({ user }) {
       ]);
 
       let fData = franchiseRes.data || [];
-      if (user?.role === 'franchise_admin') {
+      if (user?.role === 'franchise_admin' || (user?.role === 'viewer' && user?.franchise_id)) {
         fData = fData.filter(f => f.id === user.franchise_id);
       }
       setFranchises(fData);
       
       if (areaRes.data) setAreas(areaRes.data);
       let supervisorsData = spvrRes.data || [];
-      if (user?.role === 'franchise_admin') {
+      if (user?.role === 'franchise_admin' || (user?.role === 'viewer' && user?.franchise_id)) {
         supervisorsData = supervisorsData.filter(s => s.franchise_id === user.franchise_id);
       }
       setSupervisors(supervisorsData);
@@ -180,7 +183,7 @@ export default function MapDashboard({ user }) {
       if (muniRes.data) setMunicipalities(muniRes.data);
       
       let locData = locRes.data || [];
-      if (user?.role === 'franchise_admin') {
+      if (user?.role === 'franchise_admin' || (user?.role === 'viewer' && user?.franchise_id)) {
         const allowedSupervisorIds = new Set(supervisorsData.map(s => s.id));
         locData = locData.filter(l => allowedSupervisorIds.has(l.supervisor_id));
       }
@@ -189,7 +192,7 @@ export default function MapDashboard({ user }) {
       if (employeeRes.error) throw employeeRes.error;
       
       let empData = employeeRes.data || [];
-      if (user?.role === 'franchise_admin') {
+      if (user?.role === 'franchise_admin' || (user?.role === 'viewer' && user?.franchise_id)) {
         empData = empData.filter(e => e.franchise_id === user.franchise_id);
       }
       setEmployees(empData);
@@ -237,6 +240,22 @@ export default function MapDashboard({ user }) {
     }
   };
 
+  const handlePaste = (e, fieldName) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          handleFileUpload({ target: { files: [file] } }, fieldName);
+          break;
+        }
+      }
+    }
+  };
+
   const checkGeofence = async (lat, lng) => {
     const query = `[out:json];(node["amenity"="school"](around:200,${lat},${lng});way["amenity"="school"](around:200,${lat},${lng});relation["amenity"="school"](around:200,${lat},${lng});node["amenity"="place_of_worship"](around:200,${lat},${lng});way["amenity"="place_of_worship"](around:200,${lat},${lng});relation["amenity"="place_of_worship"](around:200,${lat},${lng}););out body;`;
     const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
@@ -255,12 +274,61 @@ export default function MapDashboard({ user }) {
     }
   };
 
-  const handleSaveEmployee = async (e) => {
-    e.preventDefault();
+  const handleSaveEmployee = async (e, bypassCollision = false) => {
+    if (e) e.preventDefault();
     if (!selectedLocation) return;
     
     setIsSaving(true);
     try {
+      // Check for employee location collision
+      if (!bypassCollision && selectedLocation.lat && selectedLocation.lng) {
+        const R = 6371e3; // metres
+        const lat1 = parseFloat(selectedLocation.lat);
+        const lon1 = parseFloat(selectedLocation.lng);
+        let hasCollision = false;
+        let collisionName = '';
+        
+        for (const emp of employees) {
+          if (editingEmployeeId && emp.id === editingEmployeeId) continue;
+          if (!emp.latitude || !emp.longitude) continue;
+          
+          const lat2 = parseFloat(emp.latitude);
+          const lon2 = parseFloat(emp.longitude);
+          
+          const φ1 = lat1 * Math.PI/180;
+          const φ2 = lat2 * Math.PI/180;
+          const Δφ = (lat2-lat1) * Math.PI/180;
+          const Δλ = (lon2-lon1) * Math.PI/180;
+
+          const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                    Math.cos(φ1) * Math.cos(φ2) *
+                    Math.sin(Δλ/2) * Math.sin(Δλ/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const d = R * c;
+
+          const empRadius = parseFloat(emp.allowed_radius) || 100;
+          if (d <= empRadius) { // Use the existing employee's allowed radius for collision
+            hasCollision = true;
+            collisionName = emp.full_name;
+            break;
+          }
+        }
+        
+        if (hasCollision) {
+          setAlertState({ 
+            isOpen: true, 
+            message: `Cannot save employee: The location conflicts with an existing employee (${collisionName}).`, 
+            type: 'error',
+            onProceed: () => {
+              setAlertState({ isOpen: false });
+              handleSaveEmployee(null, true);
+            }
+          });
+          setIsSaving(false);
+          return;
+        }
+      }
+
       const payload = {
         ...employeeFormData,
         latitude: selectedLocation.lat,
@@ -269,6 +337,7 @@ export default function MapDashboard({ user }) {
         franchise_id: employeeFormData.franchise_id || null,
         area_id: employeeFormData.area_id || null,
         municipality_id: employeeFormData.municipality_id || null,
+        contact_number: employeeFormData.contact_number || null,
         photo_url: employeeFormData.photo_url || null,
         id_photo_url: employeeFormData.id_photo_url || null,
         coordinate_screenshot_url: employeeFormData.coordinate_screenshot_url || null
@@ -285,13 +354,21 @@ export default function MapDashboard({ user }) {
       }
 
       if (editingEmployeeId) {
-        const { error } = await supabase.from('employees').update(payload).eq('id', editingEmployeeId);
+        const { data, error } = await supabase.from('employees').update(payload).eq('id', editingEmployeeId).select();
         if (error) throw error;
-        setAlertState({ isOpen: true, message: 'Successfully updated employee!', type: 'success' });
+        toast.success('Successfully updated employee!');
+        if (data && data.length > 0) {
+          setAutoOpenEmployeeId(data[0].id);
+          setTimeout(() => setAutoOpenEmployeeId(null), 1000);
+        }
       } else {
-        const { error } = await supabase.from('employees').insert([payload]);
+        const { data, error } = await supabase.from('employees').insert([payload]).select();
         if (error) throw error;
-        setAlertState({ isOpen: true, message: 'Successfully added employee!', type: 'success' });
+        toast.success('Successfully added employee!');
+        if (data && data.length > 0) {
+          setAutoOpenEmployeeId(data[0].id);
+          setTimeout(() => setAutoOpenEmployeeId(null), 1000);
+        }
       }
       
       setIsEmployeeModalOpen(false);
@@ -323,8 +400,8 @@ export default function MapDashboard({ user }) {
     if (selectedFranchise !== 'all') {
       filtered = filtered.filter(e => e.franchise_id?.toString() === selectedFranchise);
     }
-    if (selectedArea !== 'all') {
-      filtered = filtered.filter(e => e.area_id?.toString() === selectedArea);
+    if (selectedAreas.length > 0) {
+      filtered = filtered.filter(e => selectedAreas.includes(e.area_id?.toString()));
     }
     if (selectedStatus !== 'all') {
       filtered = filtered.filter(e => e.status?.toLowerCase() === selectedStatus.toLowerCase());
@@ -334,7 +411,7 @@ export default function MapDashboard({ user }) {
     }
     
     return filtered;
-  }, [employees, debouncedSearch, selectedFranchise, selectedArea, selectedStatus, selectedSupervisor]);
+  }, [employees, debouncedSearch, selectedFranchise, selectedAreas, selectedStatus, selectedSupervisor]);
 
   const stats = useMemo(() => {
     let active = 0;
@@ -361,6 +438,7 @@ export default function MapDashboard({ user }) {
       franchise_id: user?.franchise_id ? user.franchise_id.toString() : '',
       area_id: '',
       municipality_id: '',
+      contact_number: '',
       address: '',
       status: 'Active',
       photo_url: '',
@@ -378,10 +456,11 @@ export default function MapDashboard({ user }) {
       employee_id: kiosk.employee_id || '',
       full_name: kiosk.full_name || '',
       role: kiosk.role || 'Agent',
-      supervisor_id: kiosk.supervisor_id || '',
-      franchise_id: kiosk.franchise_id || '',
-      area_id: kiosk.area_id || '',
-      municipality_id: kiosk.municipality_id || '',
+      supervisor_id: kiosk.supervisor_id ? kiosk.supervisor_id.toString() : '',
+      franchise_id: kiosk.franchise_id ? kiosk.franchise_id.toString() : '',
+      area_id: kiosk.area_id ? kiosk.area_id.toString() : '',
+      municipality_id: kiosk.municipality_id ? kiosk.municipality_id.toString() : '',
+      contact_number: kiosk.contact_number || '',
       address: kiosk.address || '',
       status: kiosk.status || 'Active',
       photo_url: kiosk.photo_url || '',
@@ -397,14 +476,44 @@ export default function MapDashboard({ user }) {
       message: `Are you sure you want to delete ${kiosk.full_name}?`,
       onConfirm: async () => {
         setConfirmState(prev => ({ ...prev, isOpen: false }));
+        
+        // Optimistic UI Update: Instantly remove the deleted employee from the map
+        setEmployees(prev => prev.filter(e => e.id !== kiosk.id));
+
         try {
           const { error } = await supabase.from('employees').delete().eq('id', kiosk.id);
           if (error) throw error;
-          setAlertState({ isOpen: true, message: 'Successfully deleted employee!', type: 'success' });
-          fetchData(); // Refresh data
+          toast.success('Successfully deleted employee!');
         } catch (err) {
           console.error('Error deleting employee:', err.message);
           setAlertState({ isOpen: true, message: 'Failed to delete employee.', type: 'error' });
+          fetchData(); // Revert on error
+        }
+      }
+    });
+  };
+
+  const handleToggleStatus = (kiosk) => {
+    const newStatus = kiosk.status === 'Active' ? 'Inactive' : 'Active';
+    const actionText = newStatus === 'Active' ? 'activate' : 'deactivate';
+    
+    setConfirmState({
+      isOpen: true,
+      message: `Are you sure you want to ${actionText} ${kiosk.full_name}?`,
+      onConfirm: async () => {
+        setConfirmState(prev => ({ ...prev, isOpen: false }));
+        
+        // Optimistic UI Update: Instantly remove the deactivated employee from the map
+        setEmployees(prev => prev.filter(e => e.id !== kiosk.id));
+
+        try {
+          const { error } = await supabase.from('employees').update({ status: newStatus }).eq('id', kiosk.id);
+          if (error) throw error;
+          toast.success(`Successfully ${actionText}d employee!`);
+        } catch (err) {
+          console.error(`Error ${actionText}ing employee:`, err.message);
+          toast.error(`Failed to ${actionText} employee.`);
+          fetchData(); // Revert on error
         }
       }
     });
@@ -425,16 +534,18 @@ export default function MapDashboard({ user }) {
         ) : null}
         <KioskMap 
           kiosks={filteredEmployees} 
-          isFiltered={selectedFranchise !== 'all' || selectedArea !== 'all' || selectedSupervisor !== 'all' || searchTerm !== ''}
+          isFiltered={selectedFranchise !== 'all' || selectedAreas.length > 0 || selectedSupervisor !== 'all' || searchTerm !== ''}
           isAddingEmployee={isAddingEmployee} 
+          autoOpenEmployeeId={autoOpenEmployeeId}
           onLocationSelected={handleLocationSelected}
-          onEditEmployee={handleEditEmployee}
-          onDeleteEmployee={handleDeleteEmployee}
+          onEditEmployee={user?.role !== 'viewer' ? handleEditEmployee : undefined}
+          onDeleteEmployee={user?.role !== 'viewer' ? handleDeleteEmployee : undefined}
+          onToggleStatus={user?.role !== 'viewer' ? handleToggleStatus : undefined}
         />
       </div>
 
       {/* ADD EMP Button */}
-      {!isAddingEmployee && (
+      {!isAddingEmployee && user?.role !== 'viewer' && (
         <button 
           onClick={() => setIsAddingEmployee(true)}
           className="absolute top-20 right-6 z-[1000] bg-slate-900/90 backdrop-blur-md border-[3px] border-emerald-500/50 hover:border-emerald-400 text-emerald-400 px-4 py-2.5 rounded-2xl flex items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all group"
@@ -468,8 +579,8 @@ export default function MapDashboard({ user }) {
           onClick={() => setIsTacticalOpen(true)}
           className="absolute top-6 right-6 z-[1000] bg-slate-900/90 backdrop-blur-md border-[3px] border-emerald-500/50 hover:border-emerald-400 text-emerald-400 px-4 py-2.5 rounded-2xl flex items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all group"
         >
-          <Shield size={20} className="group-hover:scale-110 transition-transform" />
-          <span className="font-black text-[11px] tracking-widest">TACTICAL</span>
+          {user?.role === 'viewer' ? <Filter size={20} className="group-hover:scale-110 transition-transform" /> : <Shield size={20} className="group-hover:scale-110 transition-transform" />}
+          <span className="font-black text-[11px] tracking-widest">{user?.role === 'viewer' ? 'FILTERS' : 'TACTICAL'}</span>
         </button>
       )}
 
@@ -486,9 +597,9 @@ export default function MapDashboard({ user }) {
           <div className="p-6 border-b border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
-                <Shield size={20} />
+                {user?.role === 'viewer' ? <Filter size={20} /> : <Shield size={20} />}
               </div>
-              <h2 className="text-lg font-black tracking-widest text-slate-100">TACTICAL VIEW</h2>
+              <h2 className="text-lg font-black tracking-widest text-slate-100">{user?.role === 'viewer' ? 'FILTERS' : 'TACTICAL VIEW'}</h2>
             </div>
             <button 
               onClick={() => setIsTacticalOpen(false)}
@@ -518,18 +629,47 @@ export default function MapDashboard({ user }) {
             {/* Sector Filter */}
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Sector Filter</label>
-              <div className="relative">
-                <select 
-                  className="w-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 font-bold text-sm rounded-2xl appearance-none outline-none py-3.5 px-4 cursor-pointer hover:bg-indigo-500/20 transition-colors"
-                  value={selectedArea}
-                  onChange={(e) => setSelectedArea(e.target.value)}
-                >
-                  <option value="all" className="bg-slate-900 text-slate-200">Total Operations Selected</option>
-                  {areas.map(a => (
-                    <option key={a.id} value={a.id} className="bg-slate-900 text-slate-200">{a.name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none" size={16} />
+              <div className="bg-slate-900/50 border border-slate-700/50 rounded-2xl p-4 space-y-3 max-h-48 overflow-y-auto custom-scrollbar">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className="relative flex items-center justify-center">
+                    <input 
+                      type="checkbox"
+                      checked={selectedAreas.length === 0}
+                      onChange={() => setSelectedAreas([])}
+                      className="w-4 h-4 appearance-none rounded bg-slate-800 border border-slate-600 checked:bg-indigo-500 checked:border-indigo-500 transition-colors cursor-pointer peer"
+                    />
+                    <svg className="absolute w-3 h-3 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <span className={`text-sm font-bold transition-colors ${selectedAreas.length === 0 ? 'text-indigo-400' : 'text-slate-300 group-hover:text-slate-200'}`}>
+                    Total Operations Selected
+                  </span>
+                </label>
+                {areas.map(a => (
+                  <label key={a.id} className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative flex items-center justify-center">
+                      <input 
+                        type="checkbox"
+                        checked={selectedAreas.includes(a.id.toString())}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedAreas([...selectedAreas, a.id.toString()]);
+                          } else {
+                            setSelectedAreas(selectedAreas.filter(id => id !== a.id.toString()));
+                          }
+                        }}
+                        className="w-4 h-4 appearance-none rounded bg-slate-800 border border-slate-600 checked:bg-indigo-500 checked:border-indigo-500 transition-colors cursor-pointer peer"
+                      />
+                      <svg className="absolute w-3 h-3 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <span className={`text-sm font-medium transition-colors ${selectedAreas.includes(a.id.toString()) ? 'text-indigo-400' : 'text-slate-400 group-hover:text-slate-300'}`}>
+                      {a.name}
+                    </span>
+                  </label>
+                ))}
               </div>
             </div>
 
@@ -658,6 +798,16 @@ export default function MapDashboard({ user }) {
                       onChange={(e) => setEmployeeFormData({...employeeFormData, full_name: e.target.value})}
                       className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
                       placeholder="e.g. Juan Dela Cruz"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Contact Number</label>
+                    <input
+                      type="text"
+                      value={employeeFormData.contact_number}
+                      onChange={(e) => setEmployeeFormData({...employeeFormData, contact_number: e.target.value})}
+                      className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                      placeholder="e.g. +639123456789"
                     />
                   </div>
                   <div>
@@ -791,17 +941,22 @@ export default function MapDashboard({ user }) {
                 {/* 2x2 Picture */}
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Employee 2x2 Picture</label>
-                  <div className="border border-emerald-500/30 border-dashed bg-emerald-500/5 rounded-xl p-3 flex gap-3 h-[110px]">
-                    <div className="w-[84px] h-[84px] bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  <div 
+                    className="border border-emerald-500/30 border-dashed bg-emerald-500/5 rounded-xl p-3 flex gap-3 h-[110px] focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all cursor-pointer"
+                    tabIndex={0}
+                    onPaste={(e) => handlePaste(e, 'photo_url')}
+                  >
+                    <div className="w-[84px] h-[84px] bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden pointer-events-none">
                       {employeeFormData.photo_url ? (
                         <img src={employeeFormData.photo_url} alt="2x2" className="w-full h-full object-cover" />
                       ) : (
                         <span className="text-2xl font-black text-slate-600">2x2</span>
                       )}
                     </div>
-                    <div className="flex flex-col justify-center">
+                    <div className="flex flex-col justify-center pointer-events-none">
                       <span className="text-xs font-bold text-slate-300">2x2 Picture</span>
-                      <label className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer mt-2">
+                      <span className="text-[10px] text-slate-500 mt-0.5 leading-tight mb-2">Upload or paste 2x2 photo.</span>
+                      <label className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer pointer-events-auto">
                         {uploading.photo_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
                         <input type="file" accept="image/*" className="hidden" disabled={uploading.photo_url} onChange={(e) => handleFileUpload(e, 'photo_url')} />
                       </label>
@@ -812,18 +967,23 @@ export default function MapDashboard({ user }) {
                 {/* Kiosk Location Image */}
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Kiosk Location Image</label>
-                  <div className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50">
-                    <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden">
+                  <div 
+                    className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all cursor-pointer"
+                    tabIndex={0}
+                    onPaste={(e) => handlePaste(e, 'id_photo_url')}
+                  >
+                    <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden pointer-events-none">
                       {employeeFormData.id_photo_url ? (
                         <img src={employeeFormData.id_photo_url} alt="Kiosk" className="w-full h-full object-cover" />
                       ) : (
                         <Store size={24} />
                       )}
                     </div>
-                    <div className="flex flex-col justify-center">
-                      <span className="text-xs font-bold text-slate-300 mb-2">Kiosk Photo</span>
-                      <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer">
-                        {uploading.id_photo_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
+                    <div className="flex flex-col justify-center pointer-events-none">
+                      <span className="text-xs font-bold text-slate-300 mb-1">Kiosk Photo</span>
+                      <span className="text-[9px] text-slate-500 mb-2 leading-tight max-w-[80px]">Upload or paste photo</span>
+                      <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer pointer-events-auto">
+                        {uploading.id_photo_url ? '...' : <><Upload size={12} /> Upload</>}
                         <input type="file" accept="image/*" className="hidden" disabled={uploading.id_photo_url} onChange={(e) => handleFileUpload(e, 'id_photo_url')} />
                       </label>
                     </div>
@@ -833,18 +993,23 @@ export default function MapDashboard({ user }) {
                 {/* GPS Screenshot */}
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">GPS Screenshot</label>
-                  <div className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50">
-                    <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden">
+                  <div 
+                    className="border border-slate-600 border-dashed rounded-xl p-3 flex items-center justify-center gap-4 h-[110px] bg-slate-800/50 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all cursor-pointer"
+                    tabIndex={0}
+                    onPaste={(e) => handlePaste(e, 'coordinate_screenshot_url')}
+                  >
+                    <div className="w-[72px] h-[72px] border border-slate-600 rounded-xl flex items-center justify-center flex-shrink-0 text-slate-500 overflow-hidden pointer-events-none">
                       {employeeFormData.coordinate_screenshot_url ? (
                         <img src={employeeFormData.coordinate_screenshot_url} alt="GPS" className="w-full h-full object-cover" />
                       ) : (
                         <MapPin size={24} />
                       )}
                     </div>
-                    <div className="flex flex-col justify-center">
-                      <span className="text-xs font-bold text-slate-300 leading-tight mb-2">GPS<br/>Screenshot</span>
-                      <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer">
-                        {uploading.coordinate_screenshot_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
+                    <div className="flex flex-col justify-center pointer-events-none">
+                      <span className="text-xs font-bold text-slate-300 leading-tight mb-1">GPS<br/>Screenshot</span>
+                      <span className="text-[9px] text-slate-500 mb-2 max-w-[80px]">Upload or paste</span>
+                      <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer pointer-events-auto">
+                        {uploading.coordinate_screenshot_url ? '...' : <><Upload size={12} /> Upload</>}
                         <input type="file" accept="image/*" className="hidden" disabled={uploading.coordinate_screenshot_url} onChange={(e) => handleFileUpload(e, 'coordinate_screenshot_url')} />
                       </label>
                     </div>
@@ -876,6 +1041,7 @@ export default function MapDashboard({ user }) {
         message={alertState.message} 
         type={alertState.type} 
         onClose={() => setAlertState({ ...alertState, isOpen: false })} 
+        onProceed={alertState.onProceed}
       />
       <ConfirmModal 
         isOpen={confirmState.isOpen} 
