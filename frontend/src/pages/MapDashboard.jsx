@@ -45,7 +45,7 @@ export default function MapDashboard({ user }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedFranchise, setSelectedFranchise] = useState(user?.franchise_id ? user.franchise_id.toString() : 'all');
-  const [selectedArea, setSelectedArea] = useState('all');
+  const [selectedAreas, setSelectedAreas] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedSupervisor, setSelectedSupervisor] = useState('all');
   const [isTacticalOpen, setIsTacticalOpen] = useState(false);
@@ -400,8 +400,8 @@ export default function MapDashboard({ user }) {
     if (selectedFranchise !== 'all') {
       filtered = filtered.filter(e => e.franchise_id?.toString() === selectedFranchise);
     }
-    if (selectedArea !== 'all') {
-      filtered = filtered.filter(e => e.area_id?.toString() === selectedArea);
+    if (selectedAreas.length > 0) {
+      filtered = filtered.filter(e => selectedAreas.includes(e.area_id?.toString()));
     }
     if (selectedStatus !== 'all') {
       filtered = filtered.filter(e => e.status?.toLowerCase() === selectedStatus.toLowerCase());
@@ -411,7 +411,7 @@ export default function MapDashboard({ user }) {
     }
     
     return filtered;
-  }, [employees, debouncedSearch, selectedFranchise, selectedArea, selectedStatus, selectedSupervisor]);
+  }, [employees, debouncedSearch, selectedFranchise, selectedAreas, selectedStatus, selectedSupervisor]);
 
   const stats = useMemo(() => {
     let active = 0;
@@ -534,7 +534,7 @@ export default function MapDashboard({ user }) {
         ) : null}
         <KioskMap 
           kiosks={filteredEmployees} 
-          isFiltered={selectedFranchise !== 'all' || selectedArea !== 'all' || selectedSupervisor !== 'all' || searchTerm !== ''}
+          isFiltered={selectedFranchise !== 'all' || selectedAreas.length > 0 || selectedSupervisor !== 'all' || searchTerm !== ''}
           isAddingEmployee={isAddingEmployee} 
           autoOpenEmployeeId={autoOpenEmployeeId}
           onLocationSelected={handleLocationSelected}
@@ -629,18 +629,47 @@ export default function MapDashboard({ user }) {
             {/* Sector Filter */}
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Sector Filter</label>
-              <div className="relative">
-                <select 
-                  className="w-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 font-bold text-sm rounded-2xl appearance-none outline-none py-3.5 px-4 cursor-pointer hover:bg-indigo-500/20 transition-colors"
-                  value={selectedArea}
-                  onChange={(e) => setSelectedArea(e.target.value)}
-                >
-                  <option value="all" className="bg-slate-900 text-slate-200">Total Operations Selected</option>
-                  {areas.map(a => (
-                    <option key={a.id} value={a.id} className="bg-slate-900 text-slate-200">{a.name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none" size={16} />
+              <div className="bg-slate-900/50 border border-slate-700/50 rounded-2xl p-4 space-y-3 max-h-48 overflow-y-auto custom-scrollbar">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className="relative flex items-center justify-center">
+                    <input 
+                      type="checkbox"
+                      checked={selectedAreas.length === 0}
+                      onChange={() => setSelectedAreas([])}
+                      className="w-4 h-4 appearance-none rounded bg-slate-800 border border-slate-600 checked:bg-indigo-500 checked:border-indigo-500 transition-colors cursor-pointer peer"
+                    />
+                    <svg className="absolute w-3 h-3 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <span className={`text-sm font-bold transition-colors ${selectedAreas.length === 0 ? 'text-indigo-400' : 'text-slate-300 group-hover:text-slate-200'}`}>
+                    Total Operations Selected
+                  </span>
+                </label>
+                {areas.map(a => (
+                  <label key={a.id} className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative flex items-center justify-center">
+                      <input 
+                        type="checkbox"
+                        checked={selectedAreas.includes(a.id.toString())}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedAreas([...selectedAreas, a.id.toString()]);
+                          } else {
+                            setSelectedAreas(selectedAreas.filter(id => id !== a.id.toString()));
+                          }
+                        }}
+                        className="w-4 h-4 appearance-none rounded bg-slate-800 border border-slate-600 checked:bg-indigo-500 checked:border-indigo-500 transition-colors cursor-pointer peer"
+                      />
+                      <svg className="absolute w-3 h-3 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <span className={`text-sm font-medium transition-colors ${selectedAreas.includes(a.id.toString()) ? 'text-indigo-400' : 'text-slate-400 group-hover:text-slate-300'}`}>
+                      {a.name}
+                    </span>
+                  </label>
+                ))}
               </div>
             </div>
 

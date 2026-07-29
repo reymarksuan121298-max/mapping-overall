@@ -85,9 +85,9 @@ function App() {
   return (
     <>
       <ToastContainer 
-        position="top-right" 
+        position="top-center" 
         autoClose={3000} 
-        style={{ top: '110px', right: '40px' }} 
+        style={{ top: '110px' }} 
       />
       <BrowserRouter>
         <Routes>
