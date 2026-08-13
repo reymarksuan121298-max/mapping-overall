@@ -180,6 +180,54 @@ const KioskMap = React.memo(function KioskMap({
     });
   }, [kiosks]);
 
+  // Pre-calculate nearest & intercept info for every existing kiosk card
+  const kioskAnalysisMap = useMemo(() => {
+    const map = {};
+    const valid = kiosks.filter(k => k.latitude != null && k.longitude != null);
+    if (valid.length > 500) return map;
+
+    for (let i = 0; i < valid.length; i++) {
+      const k1 = valid[i];
+      const rad1 = parseInt(k1.allowed_radius || '100', 10) || 100;
+      let minDistance = Infinity;
+      let nearest = null;
+      const intercepts = [];
+
+      for (let j = 0; j < valid.length; j++) {
+        if (i === j) continue;
+        const k2 = valid[j];
+        const rad2 = parseInt(k2.allowed_radius || '100', 10) || 100;
+        const dist = calculateDistanceMeters(k1.latitude, k1.longitude, k2.latitude, k2.longitude);
+
+        if (dist !== null) {
+          if (dist < minDistance) {
+            minDistance = dist;
+            nearest = { full_name: k2.full_name, distance: dist, employee_id: k2.employee_id };
+          }
+          const sumRadius = rad1 + rad2;
+          if (dist <= sumRadius) {
+            intercepts.push({
+              id: k2.id,
+              full_name: k2.full_name,
+              employee_id: k2.employee_id,
+              distance: dist,
+              rad1,
+              rad2,
+              sumRadius,
+              overlap: sumRadius - dist
+            });
+          }
+        }
+      }
+
+      map[k1.id] = {
+        nearest,
+        intercepts: intercepts.sort((a, b) => a.distance - b.distance)
+      };
+    }
+    return map;
+  }, [kiosks]);
+
   // Compute nearest existing employee to the newly selected pin location
   const nearestToSelected = useMemo(() => {
     if (!selectedLocation || selectedLocation.lat == null || selectedLocation.lng == null) return null;
@@ -212,6 +260,7 @@ const KioskMap = React.memo(function KioskMap({
   const renderMarkers = useMemo(() => {
     return kiosks.filter(k => k.latitude != null && k.longitude != null).map((kiosk) => {
       const spvrColor = kiosk.supervisors?.color || '#10b981';
+      const analysis = kioskAnalysisMap[kiosk.id];
 
       return (
         <Marker 
@@ -270,6 +319,46 @@ const KioskMap = React.memo(function KioskMap({
                   </div>
                 </div>
               </div>
+
+              {/* Radius Intercept Alert inside Marker Popup Card */}
+              {analysis?.intercepts && analysis.intercepts.length > 0 ? (
+                <div className="bg-rose-500/10 rounded-xl p-3 border-2 border-rose-500/40 mb-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-rose-400 font-black text-xs uppercase tracking-wider">
+                      <AlertTriangle size={15} className="animate-bounce text-rose-400" />
+                      <span>Radius Intercept Alert</span>
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded border border-rose-500/40">
+                      {analysis.intercepts.length} Intercept{analysis.intercepts.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  
+                  {analysis.intercepts.map((item, idx) => (
+                    <div key={item.id || idx} className="bg-slate-900/90 rounded-lg p-2 border border-rose-500/30 text-xs">
+                      <div className="flex items-center justify-between text-slate-200 font-bold mb-0.5">
+                        <span className="truncate max-w-[170px]">{item.full_name}</span>
+                        <span className="text-rose-400 font-mono text-[11px]">{item.distance}m apart</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 pt-1 border-t border-slate-800">
+                        <span>Radii: {item.rad1}m + {item.rad2}m</span>
+                        <span className="text-rose-300 font-bold bg-rose-500/20 px-1.5 py-0.5 rounded border border-rose-500/30">
+                          Overlap: {item.overlap}m
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : analysis?.nearest ? (
+                <div className="bg-emerald-500/10 rounded-xl p-3 border border-emerald-500/20 mb-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Nearest Kiosk</p>
+                    <p className="text-xs font-bold text-slate-100 truncate max-w-[180px]">{analysis.nearest.full_name}</p>
+                  </div>
+                  <span className="text-xs font-mono font-black text-emerald-400 bg-emerald-500/20 px-2.5 py-1 rounded-md border border-emerald-500/30">
+                    {analysis.nearest.distance} meters away
+                  </span>
+                </div>
+              ) : null}
 
               {/* Main Info Grid */}
               <div className="grid grid-cols-2 gap-3 mb-3">
@@ -330,7 +419,7 @@ const KioskMap = React.memo(function KioskMap({
         </Marker>
       );
     });
-  }, [kiosks, onEditEmployee, onDeleteEmployee, onToggleStatus]);
+  }, [kiosks, kioskAnalysisMap, onEditEmployee, onDeleteEmployee, onToggleStatus]);
 
   // Center roughly on Mindanao, Philippines
   const defaultCenter = [7.9, 124.0];
