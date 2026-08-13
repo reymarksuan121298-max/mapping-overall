@@ -487,8 +487,43 @@ const KioskMap = React.memo(function KioskMap({
                     <p className="text-[11px] text-slate-400">Ready to save</p>
                   )}
 
+                  {/* Manual Coordinates Input */}
+                  <div className="mt-2.5 pt-2 border-t border-slate-800 text-left space-y-1">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Manual Coordinates</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div>
+                        <span className="text-[8px] uppercase tracking-wider text-slate-500 font-bold block mb-0.5">Latitude</span>
+                        <input
+                          type="number"
+                          step="any"
+                          value={selectedLocation?.lat ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            onLocationSelected && onLocationSelected({ lat: val === '' ? '' : parseFloat(val), lng: selectedLocation?.lng });
+                          }}
+                          className="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded px-2 py-1 text-xs font-mono text-emerald-400 outline-none"
+                          placeholder="Latitude"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[8px] uppercase tracking-wider text-slate-500 font-bold block mb-0.5">Longitude</span>
+                        <input
+                          type="number"
+                          step="any"
+                          value={selectedLocation?.lng ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            onLocationSelected && onLocationSelected({ lat: selectedLocation?.lat, lng: val === '' ? '' : parseFloat(val) });
+                          }}
+                          className="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded px-2 py-1 text-xs font-mono text-emerald-400 outline-none"
+                          placeholder="Longitude"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Remove Pin Button */}
-                  <div className="mt-3 pt-2.5 border-t border-slate-800 flex justify-center">
+                  <div className="mt-2.5 pt-2 border-t border-slate-800 flex justify-center">
                     <button
                       type="button"
                       onClick={(e) => {

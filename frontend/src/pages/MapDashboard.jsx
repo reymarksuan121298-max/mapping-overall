@@ -666,13 +666,13 @@ export default function MapDashboard({ user }) {
 
       {/* Pin Placement Mode Banner */}
       {isAddingEmployee && (
-        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[1000] backdrop-blur-2xl rounded-full pl-4 pr-3 py-3 shadow-[0_15px_40px_rgba(0,0,0,0.7)] border flex items-center gap-6 animate-in fade-in slide-in-from-top-4 ${
+        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[1000] backdrop-blur-2xl rounded-2xl px-5 py-3 shadow-[0_15px_40px_rgba(0,0,0,0.7)] border flex flex-col md:flex-row items-center gap-4 animate-in fade-in slide-in-from-top-4 ${
           interceptingEmployees.length > 0
             ? 'bg-slate-900/95 border-rose-500/80 text-rose-100 shadow-[0_0_30px_rgba(244,63,94,0.4)]'
             : 'bg-slate-900/95 border-slate-700 text-slate-200'
         }`}>
-          <div className="flex items-center gap-4">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center border shrink-0 ${
               interceptingEmployees.length > 0
                 ? 'bg-rose-500/20 border-rose-500/50 text-rose-400 animate-bounce'
                 : 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
@@ -680,17 +680,45 @@ export default function MapDashboard({ user }) {
               {interceptingEmployees.length > 0 ? <AlertTriangle size={20} /> : <MapPin size={18} />}
             </div>
             <div>
-              <span className="text-sm font-bold">Click anywhere on the map to place the agent kiosk</span>
+              <span className="text-xs font-bold block">Click map or enter coordinates manually:</span>
               {interceptingEmployees.length > 0 && (
-                <p className="text-xs font-black text-rose-400 mt-0.5 animate-pulse">
-                  ⚠️ RADIUS INTERCEPT ALERT! Intersects with {interceptingEmployees[0].full_name} ({interceptingEmployees[0].distance}m away, radii overlap by {interceptingEmployees[0].overlap}m)
+                <p className="text-[11px] font-black text-rose-400 mt-0.5 animate-pulse">
+                  ⚠️ RADIUS INTERCEPT ALERT! Intersects with {interceptingEmployees[0].full_name} ({interceptingEmployees[0].distance}m away, overlap {interceptingEmployees[0].overlap}m)
                 </p>
               )}
             </div>
           </div>
+
+          {/* Manual Input Fields */}
+          <div className="flex items-center gap-2 bg-slate-950/80 p-1.5 rounded-xl border border-slate-800">
+            <input
+              type="number"
+              step="any"
+              value={selectedLocation?.lat ?? ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedLocation(prev => ({ ...prev, lat: val === '' ? '' : parseFloat(val) }));
+              }}
+              placeholder="Latitude"
+              className="w-24 bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-lg px-2 py-1 text-xs font-mono text-emerald-400 outline-none"
+            />
+            <span className="text-slate-600 text-xs">•</span>
+            <input
+              type="number"
+              step="any"
+              value={selectedLocation?.lng ?? ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedLocation(prev => ({ ...prev, lng: val === '' ? '' : parseFloat(val) }));
+              }}
+              placeholder="Longitude"
+              className="w-24 bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-lg px-2 py-1 text-xs font-mono text-emerald-400 outline-none"
+            />
+          </div>
+
           <button 
             onClick={() => setIsAddingEmployee(false)}
-            className="bg-slate-800 hover:bg-rose-500/20 text-rose-400 border border-slate-700 hover:border-rose-500/50 text-xs font-black uppercase tracking-widest px-6 py-3 rounded-full shadow-lg transition-all"
+            className="bg-slate-800 hover:bg-rose-500/20 text-rose-400 border border-slate-700 hover:border-rose-500/50 text-xs font-black uppercase tracking-widest px-4 py-2 rounded-xl shadow-lg transition-all"
           >
             CANCEL
           </button>
