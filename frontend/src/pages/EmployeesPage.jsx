@@ -197,7 +197,7 @@ export default function EmployeesPage({ user }) {
       supervisor_id: emp.supervisor_id || '',
       contact_number: emp.contact_number || '',
       municipality: emp.municipality || 'None',
-      allowed_radius: emp.allowed_radius || '100',
+      allowed_radius: (emp.radius_meters || emp.allowed_radius || 100).toString(),
       address: emp.address || '',
       latitude: emp.latitude || '',
       longitude: emp.longitude || '',
@@ -334,8 +334,8 @@ export default function EmployeesPage({ user }) {
         longitude: formData.longitude || null,
         address: formData.address || null,
         contact_number: formData.contact_number || null,
-        municipality: formData.municipality || null,
-        allowed_radius: formData.allowed_radius || '100'
+        municipality_id: formData.municipality_id || (formData.municipality && formData.municipality !== 'None' ? formData.municipality : null),
+        radius_meters: parseInt(formData.allowed_radius || formData.radius_meters || '100', 10) || 100
       };
 
       if (modalMode === 'add' && formData.latitude && formData.longitude) {

@@ -341,8 +341,10 @@ export default function MapDashboard({ user }) {
     
     setIsSaving(true);
     try {
+      const { allowed_radius, ...restFormData } = employeeFormData;
       const payload = {
-        ...employeeFormData,
+        ...restFormData,
+        radius_meters: parseInt(allowed_radius || '100', 10) || 100,
         latitude: selectedLocation.lat,
         longitude: selectedLocation.lng,
         supervisor_id: employeeFormData.supervisor_id || null,
@@ -464,7 +466,7 @@ export default function MapDashboard({ user }) {
     employees.forEach(emp => {
       if (emp.latitude != null && emp.longitude != null && emp.id !== editingEmployeeId) {
         const dist = calculateDistanceMeters(curLat, curLng, emp.latitude, emp.longitude);
-        const empRadius = parseInt(emp.allowed_radius || '100', 10) || 100;
+        const empRadius = parseInt(emp.radius_meters || emp.allowed_radius || '100', 10) || 100;
         const sumRadius = newRadius + empRadius;
 
         if (dist !== null && dist <= sumRadius) {
@@ -546,7 +548,7 @@ export default function MapDashboard({ user }) {
       municipality_id: kiosk.municipality_id || '',
       address: kiosk.address || '',
       status: kiosk.status || 'Active',
-      allowed_radius: kiosk.allowed_radius || '100',
+      allowed_radius: (kiosk.radius_meters || kiosk.allowed_radius || 100).toString(),
       photo_url: kiosk.photo_url || '',
       id_photo_url: kiosk.id_photo_url || '',
       coordinate_screenshot_url: kiosk.coordinate_screenshot_url || ''
