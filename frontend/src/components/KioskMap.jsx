@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, Circle } from 'react-leaflet';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, Circle, Polyline, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { User, MapPin, Layers, Shield, Clock, Trash2 } from 'lucide-react';
+import { User, MapPin, Layers, Shield, Clock, Trash2, Edit3 } from 'lucide-react';
 
 // Fix for default marker icons
 delete L.Icon.Default.prototype._getIconUrl;
@@ -51,6 +51,53 @@ const createSupervisorIcon = () => {
     popupAnchor: [0, -16]
   });
 };
+
+function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
+  const l1 = parseFloat(lat1);
+  const n1 = parseFloat(lon1);
+  const l2 = parseFloat(lat2);
+  const n2 = parseFloat(lon2);
+  if (isNaN(l1) || isNaN(n1) || isNaN(l2) || isNaN(n2)) return null;
+
+  const R = 6371000;
+  const dLat = (l2 - l1) * Math.PI / 180;
+  const dLon = (n2 - n1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(l1 * Math.PI / 180) * Math.cos(l2 * Math.PI / 180) * 
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+}
+
+// Controller component to handle auto flying to location & popping up marker card
+function AutoOpenMarkerController({ autoOpenKiosk, markerRefs }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (autoOpenKiosk && autoOpenKiosk.latitude != null && autoOpenKiosk.longitude != null) {
+      const lat = parseFloat(autoOpenKiosk.latitude);
+      const lng = parseFloat(autoOpenKiosk.longitude);
+
+      map.flyTo([lat, lng], 15, {
+        animate: true,
+        duration: 1.2
+      });
+
+      const timer = setTimeout(() => {
+        const marker = markerRefs.current[autoOpenKiosk.id];
+        if (marker) {
+          marker.openPopup();
+        }
+      }, 400);
+
+      return () => clearTimeout(timer);
+    }
+  }, [autoOpenKiosk, map, markerRefs]);
+
+  return null;
+}
 
 // Component to handle map clicks for adding pins
 function MapClickHandler({ isActive, onLocationSelected }) {
@@ -101,9 +148,22 @@ const MAP_LAYERS = {
   }
 };
 
-const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLocationSelected, isFiltered, onEditEmployee, onDeleteEmployee, supervisorLocations = [] }) {
+const KioskMap = React.memo(function KioskMap({ 
+  kiosks, 
+  isAddingEmployee, 
+  onLocationSelected, 
+  isFiltered, 
+  onEditEmployee, 
+  onDeleteEmployee, 
+  onToggleStatus, 
+  supervisorLocations = [], 
+  autoOpenKiosk, 
+  selectedLocation,
+  newRadius = 100
+}) {
   const [activeLayer, setActiveLayer] = useState('street');
   const [isLayerMenuOpen, setIsLayerMenuOpen] = useState(false);
+  const markerRefs = useRef({});
 
   const renderCircles = useMemo(() => {
     return kiosks.filter(k => k.latitude != null && k.longitude != null).map((kiosk) => {
@@ -120,13 +180,49 @@ const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLoca
     });
   }, [kiosks]);
 
+  // Compute nearest existing employee to the newly selected pin location
+  const nearestToSelected = useMemo(() => {
+    if (!selectedLocation || selectedLocation.lat == null || selectedLocation.lng == null) return null;
+    const curLat = parseFloat(selectedLocation.lat);
+    const curLng = parseFloat(selectedLocation.lng);
+    if (isNaN(curLat) || isNaN(curLng)) return null;
+
+    let minDistance = Infinity;
+    let nearest = null;
+
+    kiosks.forEach(k => {
+      if (k.latitude != null && k.longitude != null) {
+        const dist = calculateDistanceMeters(curLat, curLng, k.latitude, k.longitude);
+        if (dist !== null && dist < minDistance) {
+          minDistance = dist;
+          const empRadius = parseInt(k.allowed_radius || '100', 10) || 100;
+          const parsedNewRad = parseInt(newRadius || '100', 10) || 100;
+          const sumRadius = parsedNewRad + empRadius;
+          const isIntercepted = dist <= sumRadius;
+          const overlap = sumRadius - dist;
+          nearest = { ...k, distance: dist, empRadius, newRadius: parsedNewRad, sumRadius, isIntercepted, overlap };
+        }
+      }
+    });
+
+    return nearest;
+  }, [selectedLocation, kiosks, newRadius]);
+
   // Aggressively memoize markers so they are completely immune to local state changes (like opening the Layer menu)
   const renderMarkers = useMemo(() => {
     return kiosks.filter(k => k.latitude != null && k.longitude != null).map((kiosk) => {
       const spvrColor = kiosk.supervisors?.color || '#10b981';
+
       return (
         <Marker 
           key={`marker-${kiosk.id}`}
+          ref={(el) => {
+            if (el) {
+              markerRefs.current[kiosk.id] = el;
+            } else {
+              delete markerRefs.current[kiosk.id];
+            }
+          }}
           position={[kiosk.latitude, kiosk.longitude]}
           icon={createCustomIcon(spvrColor)}
         >
@@ -142,18 +238,24 @@ const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLoca
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${
-                      kiosk.status === 'Active' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                    }`}>
+                  <button 
+                    onClick={() => onToggleStatus && onToggleStatus(kiosk)}
+                    title="Click to toggle status (Active / Inactive)"
+                    className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest cursor-pointer transition-all hover:scale-105 active:scale-95 ${
+                        kiosk.status === 'Active' 
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-500/30' 
+                          : 'bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-emerald-500/20 hover:text-emerald-400 hover:border-emerald-500/30'
+                      }`}
+                  >
                     {kiosk.status || 'Unknown'}
-                  </span>
+                  </button>
                   <div className="flex items-center gap-3">
                     {onEditEmployee && (
                       <button 
                         onClick={() => onEditEmployee(kiosk)} 
-                        className="text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-300 transition-colors"
+                        className="text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 bg-indigo-500/10 px-2 py-1 rounded border border-indigo-500/20"
                       >
-                        Edit Data
+                        <Edit3 size={11} /> EDIT DATA
                       </button>
                     )}
                     {onDeleteEmployee && (
@@ -228,7 +330,7 @@ const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLoca
         </Marker>
       );
     });
-  }, [kiosks]);
+  }, [kiosks, onEditEmployee, onDeleteEmployee, onToggleStatus]);
 
   // Center roughly on Mindanao, Philippines
   const defaultCenter = [7.9, 124.0];
@@ -239,21 +341,110 @@ const KioskMap = React.memo(function KioskMap({ kiosks, isAddingEmployee, onLoca
         center={defaultCenter} 
         zoom={8} 
         style={{ height: '100%', width: '100%', zIndex: 0 }}
-        zoomControl={false} // Will add custom zoom control later or rely on scroll
-        preferCanvas={true} // MASSIVE PERFORMANCE BOOST: Draws circles on canvas instead of SVG DOM nodes
+        zoomControl={false}
+        preferCanvas={true}
+        inertia={true}
+        inertiaDeceleration={3000}
+        wheelDebounceTime={150}
+        wheelPxPerZoomLevel={120}
       >
         <TileLayer
           key={activeLayer}
           url={MAP_LAYERS[activeLayer].url}
           attribution={MAP_LAYERS[activeLayer].attribution}
           subdomains={MAP_LAYERS[activeLayer].subdomains}
-          keepBuffer={8}
-          updateWhenIdle={true}
+          keepBuffer={2}
+          updateWhenIdle={false}
           updateWhenZooming={false}
         />
         
         <MapBounds kiosks={kiosks} isFiltered={isFiltered} />
         <MapClickHandler isActive={isAddingEmployee} onLocationSelected={onLocationSelected} />
+        <AutoOpenMarkerController autoOpenKiosk={autoOpenKiosk} markerRefs={markerRefs} />
+
+        {/* Render Circles for existing kiosks */}
+        {renderCircles}
+
+        {/* Visual distance line, radius circle & intercept tooltip when adding a new employee pin */}
+        {selectedLocation && selectedLocation.lat != null && selectedLocation.lng != null && (
+          <>
+            {/* New Pin Radius Circle */}
+            <Circle 
+              center={[parseFloat(selectedLocation.lat), parseFloat(selectedLocation.lng)]}
+              pathOptions={{ 
+                fillColor: nearestToSelected?.isIntercepted ? '#f43f5e' : '#10b981', 
+                color: nearestToSelected?.isIntercepted ? '#f43f5e' : '#10b981', 
+                fillOpacity: nearestToSelected?.isIntercepted ? 0.25 : 0.15, 
+                weight: 2, 
+                dashArray: '5 5' 
+              }}
+              radius={parseInt(newRadius || '100', 10) || 100}
+            />
+
+            {/* New Pin Marker */}
+            <Marker 
+              position={[parseFloat(selectedLocation.lat), parseFloat(selectedLocation.lng)]}
+              icon={createCustomIcon(nearestToSelected?.isIntercepted ? '#f43f5e' : '#10b981')}
+            >
+              <Popup defaultOpen>
+                <div className="p-3 min-w-[220px] text-center bg-slate-900 rounded-xl border border-slate-700">
+                  <p className={`text-xs font-black uppercase tracking-wider mb-1 ${nearestToSelected?.isIntercepted ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    {nearestToSelected?.isIntercepted ? '⚠️ Radius Intercept Alert!' : 'New Employee Pin'}
+                  </p>
+                  {nearestToSelected ? (
+                    <div className="mt-1 space-y-1">
+                      <p className="text-[11px] font-semibold text-slate-300">
+                        Nearest: <span className="font-bold text-slate-100">{nearestToSelected.full_name}</span>
+                      </p>
+                      <div className={`text-xs font-mono font-black px-2.5 py-1 rounded-md border inline-block ${
+                        nearestToSelected.isIntercepted
+                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
+                          : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                      }`}>
+                        {nearestToSelected.distance} meters apart
+                      </div>
+                      {nearestToSelected.isIntercepted && (
+                        <p className="text-[10px] text-rose-400 font-bold">
+                          Radii overlap by {nearestToSelected.overlap}m!
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400">Ready to save</p>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+
+            {/* Polyline to nearest existing employee */}
+            {nearestToSelected && (
+              <Polyline 
+                positions={[
+                  [parseFloat(selectedLocation.lat), parseFloat(selectedLocation.lng)],
+                  [nearestToSelected.latitude, nearestToSelected.longitude]
+                ]}
+                pathOptions={{ 
+                  color: nearestToSelected.isIntercepted ? '#f43f5e' : '#10b981', 
+                  weight: 3, 
+                  dashArray: '6 6', 
+                  opacity: 0.9 
+                }}
+              >
+                <Tooltip permanent direction="center" opacity={0.95}>
+                  <span className={`font-mono font-black text-xs px-2.5 py-1 rounded-md border shadow-xl ${
+                    nearestToSelected.isIntercepted
+                      ? 'bg-rose-950 text-rose-300 border-rose-500/60'
+                      : 'bg-slate-900 text-emerald-400 border-emerald-500/40'
+                  }`}>
+                    {nearestToSelected.isIntercepted 
+                      ? `⚠️ ${nearestToSelected.distance}m (${nearestToSelected.overlap}m overlap)` 
+                      : `${nearestToSelected.distance} meters`}
+                  </span>
+                </Tooltip>
+              </Polyline>
+            )}
+          </>
+        )}
 
         {/* Floating Layer Control */}
         <div className="absolute bottom-8 left-8 z-[1000] flex items-end gap-3">

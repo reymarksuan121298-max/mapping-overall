@@ -1,9 +1,28 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import KioskMap from '../components/KioskMap';
-import { MapPin, Users, Activity, Filter, Layers, Map as MapIcon, Shield, X, Search, ChevronDown, UserPlus, Save, Upload, Store, AlertTriangle } from 'lucide-react';
+import { MapPin, Users, Activity, Filter, Layers, Map as MapIcon, Shield, X, Search, ChevronDown, UserPlus, Save, Upload, Store, AlertTriangle, Sparkles } from 'lucide-react';
 import AlertModal from '../components/AlertModal';
 import ConfirmModal from '../components/ConfirmModal';
+
+function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
+  const l1 = parseFloat(lat1);
+  const n1 = parseFloat(lon1);
+  const l2 = parseFloat(lat2);
+  const n2 = parseFloat(lon2);
+  if (isNaN(l1) || isNaN(n1) || isNaN(l2) || isNaN(n2)) return null;
+
+  const R = 6371000;
+  const dLat = (l2 - l1) * Math.PI / 180;
+  const dLon = (n2 - n1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(l1 * Math.PI / 180) * Math.cos(l2 * Math.PI / 180) * 
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+}
 
 export default function MapDashboard({ user }) {
   const [employees, setEmployees] = useState([]);
@@ -13,6 +32,9 @@ export default function MapDashboard({ user }) {
   const [supervisorLocations, setSupervisorLocations] = useState([]);
   const [municipalities, setMunicipalities] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const [autoOpenKiosk, setAutoOpenKiosk] = useState(null);
+  const [newEmployeeBanner, setNewEmployeeBanner] = useState(null);
 
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState(null);
@@ -55,7 +77,7 @@ export default function MapDashboard({ user }) {
     fetchData();
 
     // Subscribe to realtime location updates
-    const channel = supabase
+    const locChannel = supabase
       .channel('schema-db-changes')
       .on(
         'postgres_changes',
@@ -63,7 +85,6 @@ export default function MapDashboard({ user }) {
         (payload) => {
           setSupervisorLocations(prev => {
             const newLoc = payload.new;
-            // Update or add
             const idx = prev.findIndex(loc => loc.supervisor_id === newLoc.supervisor_id);
             if (idx >= 0) {
               const updated = [...prev];
@@ -77,10 +98,69 @@ export default function MapDashboard({ user }) {
       )
       .subscribe();
 
+    // Subscribe to realtime employee changes across all logins / franchises
+    const empChannel = supabase
+      .channel('realtime-employees-map-channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'employees' },
+        async (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const { data: newEmp, error } = await supabase
+              .from('employees')
+              .select(`
+                *,
+                franchises (name),
+                areas (name),
+                supervisors (name, color)
+              `)
+              .eq('id', payload.new.id)
+              .maybeSingle();
+
+            if (!error && newEmp) {
+              // Check franchise access if user is franchise admin
+              if (user?.role === 'franchise_admin' && user?.franchise_id && newEmp.franchise_id !== user.franchise_id) {
+                return;
+              }
+
+              setEmployees(prev => {
+                if (prev.some(e => e.id === newEmp.id)) {
+                  return prev.map(e => e.id === newEmp.id ? newEmp : e);
+                }
+                return [newEmp, ...prev];
+              });
+
+              // Automatically pop card popup and center map across all franchise logins!
+              setAutoOpenKiosk({ ...newEmp, _t: Date.now() });
+              setNewEmployeeBanner(newEmp);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const { data: updatedEmp } = await supabase
+              .from('employees')
+              .select(`
+                *,
+                franchises (name),
+                areas (name),
+                supervisors (name, color)
+              `)
+              .eq('id', payload.new.id)
+              .maybeSingle();
+
+            if (updatedEmp) {
+              setEmployees(prev => prev.map(e => e.id === updatedEmp.id ? updatedEmp : e));
+            }
+          } else if (payload.eventType === 'DELETE') {
+            setEmployees(prev => prev.filter(e => e.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(locChannel);
+      supabase.removeChannel(empChannel);
     };
-  }, []);
+  }, [user]);
 
   // Debounce search term to prevent rapid re-renders while typing
   useEffect(() => {
@@ -289,9 +369,24 @@ export default function MapDashboard({ user }) {
         if (error) throw error;
         setAlertState({ isOpen: true, message: 'Successfully updated employee!', type: 'success' });
       } else {
-        const { error } = await supabase.from('employees').insert([payload]);
+        const { data: insertedData, error } = await supabase
+          .from('employees')
+          .insert([payload])
+          .select(`
+            *,
+            franchises (name),
+            areas (name),
+            supervisors (name, color)
+          `);
         if (error) throw error;
         setAlertState({ isOpen: true, message: 'Successfully added employee!', type: 'success' });
+
+        if (insertedData && insertedData[0]) {
+          const newEmp = insertedData[0];
+          setEmployees(prev => [newEmp, ...prev.filter(e => e.id !== newEmp.id)]);
+          setAutoOpenKiosk({ ...newEmp, _t: Date.now() });
+          setNewEmployeeBanner(newEmp);
+        }
       }
       
       setIsEmployeeModalOpen(false);
@@ -332,9 +427,16 @@ export default function MapDashboard({ user }) {
     if (selectedSupervisor !== 'all') {
       filtered = filtered.filter(e => e.supervisor_id?.toString() === selectedSupervisor);
     }
+
+    if (autoOpenKiosk && !filtered.some(e => e.id === autoOpenKiosk.id)) {
+      const target = employees.find(e => e.id === autoOpenKiosk.id);
+      if (target) {
+        filtered = [target, ...filtered];
+      }
+    }
     
     return filtered;
-  }, [employees, debouncedSearch, selectedFranchise, selectedArea, selectedStatus, selectedSupervisor]);
+  }, [employees, debouncedSearch, selectedFranchise, selectedArea, selectedStatus, selectedSupervisor, autoOpenKiosk]);
 
   const stats = useMemo(() => {
     let active = 0;
@@ -350,6 +452,59 @@ export default function MapDashboard({ user }) {
     };
   }, [filteredEmployees]);
 
+  const newRadius = parseInt(employeeFormData.allowed_radius || '100', 10) || 100;
+
+  const interceptingEmployees = useMemo(() => {
+    if (!selectedLocation || selectedLocation.lat == null || selectedLocation.lng == null) return [];
+    const curLat = parseFloat(selectedLocation.lat);
+    const curLng = parseFloat(selectedLocation.lng);
+    if (isNaN(curLat) || isNaN(curLng)) return [];
+
+    const intercepts = [];
+    employees.forEach(emp => {
+      if (emp.latitude != null && emp.longitude != null && emp.id !== editingEmployeeId) {
+        const dist = calculateDistanceMeters(curLat, curLng, emp.latitude, emp.longitude);
+        const empRadius = parseInt(emp.allowed_radius || '100', 10) || 100;
+        const sumRadius = newRadius + empRadius;
+
+        if (dist !== null && dist <= sumRadius) {
+          intercepts.push({
+            ...emp,
+            distance: dist,
+            newRadius,
+            empRadius,
+            sumRadius,
+            overlap: sumRadius - dist
+          });
+        }
+      }
+    });
+
+    return intercepts.sort((a, b) => a.distance - b.distance);
+  }, [selectedLocation, employees, editingEmployeeId, newRadius]);
+
+  const nearestExistingEmployee = useMemo(() => {
+    if (!selectedLocation || selectedLocation.lat == null || selectedLocation.lng == null) return null;
+    const curLat = parseFloat(selectedLocation.lat);
+    const curLng = parseFloat(selectedLocation.lng);
+    if (isNaN(curLat) || isNaN(curLng)) return null;
+
+    let minDistance = Infinity;
+    let nearest = null;
+
+    employees.forEach(emp => {
+      if (emp.latitude != null && emp.longitude != null && emp.id !== editingEmployeeId) {
+        const dist = calculateDistanceMeters(curLat, curLng, emp.latitude, emp.longitude);
+        if (dist !== null && dist < minDistance) {
+          minDistance = dist;
+          nearest = { ...emp, distance: dist };
+        }
+      }
+    });
+
+    return nearest;
+  }, [selectedLocation, employees, editingEmployeeId]);
+
   const handleLocationSelected = useCallback((latlng) => {
     setSelectedLocation(latlng);
     setEditingEmployeeId(null);
@@ -363,6 +518,7 @@ export default function MapDashboard({ user }) {
       municipality_id: '',
       address: '',
       status: 'Active',
+      allowed_radius: '100',
       photo_url: '',
       id_photo_url: '',
       coordinate_screenshot_url: ''
@@ -384,6 +540,7 @@ export default function MapDashboard({ user }) {
       municipality_id: kiosk.municipality_id || '',
       address: kiosk.address || '',
       status: kiosk.status || 'Active',
+      allowed_radius: kiosk.allowed_radius || '100',
       photo_url: kiosk.photo_url || '',
       id_photo_url: kiosk.id_photo_url || '',
       coordinate_screenshot_url: kiosk.coordinate_screenshot_url || ''
@@ -391,7 +548,7 @@ export default function MapDashboard({ user }) {
     setIsEmployeeModalOpen(true);
   }, []);
 
-  const handleDeleteEmployee = (kiosk) => {
+  const handleDeleteEmployee = useCallback((kiosk) => {
     setConfirmState({
       isOpen: true,
       message: `Are you sure you want to delete ${kiosk.full_name}?`,
@@ -408,7 +565,24 @@ export default function MapDashboard({ user }) {
         }
       }
     });
-  };
+  }, [fetchData]);
+
+  const handleToggleStatus = useCallback(async (kiosk) => {
+    const newStatus = kiosk.status === 'Active' ? 'Inactive' : 'Active';
+    setEmployees(prev => prev.map(e => e.id === kiosk.id ? { ...e, status: newStatus } : e));
+    if (autoOpenKiosk && autoOpenKiosk.id === kiosk.id) {
+      setAutoOpenKiosk(prev => prev ? { ...prev, status: newStatus } : prev);
+    }
+    try {
+      const { error } = await supabase.from('employees').update({ status: newStatus }).eq('id', kiosk.id);
+      if (error) throw error;
+      setAlertState({ isOpen: true, message: `Status updated to ${newStatus} for ${kiosk.full_name}!`, type: 'success' });
+    } catch (err) {
+      console.error('Error toggling status:', err.message);
+      setEmployees(prev => prev.map(e => e.id === kiosk.id ? { ...e, status: kiosk.status } : e));
+      setAlertState({ isOpen: true, message: 'Failed to update status.', type: 'error' });
+    }
+  }, [autoOpenKiosk]);
 
   return (
     <div className="flex-1 flex flex-col relative h-full w-full bg-slate-900">
@@ -430,8 +604,47 @@ export default function MapDashboard({ user }) {
           onLocationSelected={handleLocationSelected}
           onEditEmployee={handleEditEmployee}
           onDeleteEmployee={handleDeleteEmployee}
+          onToggleStatus={handleToggleStatus}
+          supervisorLocations={supervisorLocations}
+          autoOpenKiosk={autoOpenKiosk}
+          selectedLocation={selectedLocation}
+          newRadius={newRadius}
         />
       </div>
+
+      {/* Realtime New Employee Notification Banner */}
+      {newEmployeeBanner && (
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[1500] bg-slate-900/95 backdrop-blur-2xl rounded-2xl px-5 py-3.5 shadow-[0_15px_40px_rgba(0,0,0,0.8)] border border-emerald-500/40 flex items-center gap-4 animate-in fade-in slide-in-from-top-4">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30 text-emerald-400">
+            <Sparkles size={20} className="animate-pulse text-emerald-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black text-emerald-400 uppercase tracking-widest">New Employee Added</span>
+              <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">REALTIME</span>
+            </div>
+            <p className="text-sm font-bold text-slate-100 mt-0.5">
+              {newEmployeeBanner.full_name} <span className="text-slate-400 font-normal">({newEmployeeBanner.franchises?.name || 'Franchise'})</span>
+            </p>
+          </div>
+          <div className="flex items-center gap-2 ml-4">
+            <button 
+              onClick={() => {
+                setAutoOpenKiosk({ ...newEmployeeBanner, _t: Date.now() });
+              }}
+              className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black px-3.5 py-2 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] cursor-pointer"
+            >
+              View Card
+            </button>
+            <button 
+              onClick={() => setNewEmployeeBanner(null)}
+              className="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ADD EMP Button */}
       {!isAddingEmployee && (
@@ -446,12 +659,31 @@ export default function MapDashboard({ user }) {
 
       {/* Pin Placement Mode Banner */}
       {isAddingEmployee && (
-        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[1000] bg-slate-900/95 backdrop-blur-2xl rounded-full pl-4 pr-3 py-3 shadow-[0_15px_40px_rgba(0,0,0,0.7)] border border-slate-700 flex items-center gap-6 animate-in fade-in slide-in-from-top-4">
+        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[1000] backdrop-blur-2xl rounded-full pl-4 pr-3 py-3 shadow-[0_15px_40px_rgba(0,0,0,0.7)] border flex items-center gap-6 animate-in fade-in slide-in-from-top-4 ${
+          interceptingEmployees.length > 0
+            ? 'bg-slate-900/95 border-rose-500/80 text-rose-100 shadow-[0_0_30px_rgba(244,63,94,0.4)]'
+            : 'bg-slate-900/95 border-slate-700 text-slate-200'
+        }`}>
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-              <MapPin size={18} className="text-emerald-400" />
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${
+              interceptingEmployees.length > 0
+                ? 'bg-rose-500/20 border-rose-500/50 text-rose-400 animate-bounce'
+                : 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
+            }`}>
+              {interceptingEmployees.length > 0 ? <AlertTriangle size={20} /> : <MapPin size={18} />}
             </div>
-            <span className="text-sm font-bold text-slate-200">Click anywhere on the map to place the agent kiosk</span>
+            <div>
+              <span className="text-sm font-bold">Click anywhere on the map to place the agent kiosk</span>
+              {interceptingEmployees.length > 0 ? (
+                <p className="text-xs font-black text-rose-400 mt-0.5 animate-pulse">
+                  ⚠️ RADIUS INTERCEPT ALERT! Intersects with {interceptingEmployees[0].full_name} ({interceptingEmployees[0].distance}m away, radii overlap by {interceptingEmployees[0].overlap}m)
+                </p>
+              ) : nearestExistingEmployee ? (
+                <p className="text-xs font-semibold text-emerald-400 mt-0.5">
+                  Nearest Kiosk: {nearestExistingEmployee.full_name} ({nearestExistingEmployee.distance} meters away)
+                </p>
+              ) : null}
+            </div>
           </div>
           <button 
             onClick={() => setIsAddingEmployee(false)}
@@ -758,8 +990,23 @@ export default function MapDashboard({ user }) {
                       placeholder="e.g. Purok 1, Brgy. San Jose"
                     />
                   </div>
-                  <div className="bg-slate-900/50 rounded-xl p-3 border border-slate-700/50 mt-4">
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Coordinates</label>
+                  <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700/50 mt-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Coordinates & Proximity</label>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-black text-slate-400 uppercase">Radius:</span>
+                        <input
+                          type="number"
+                          min="10"
+                          max="5000"
+                          value={employeeFormData.allowed_radius || '100'}
+                          onChange={(e) => setEmployeeFormData({ ...employeeFormData, allowed_radius: e.target.value })}
+                          className="w-16 bg-slate-900 border border-slate-700 text-emerald-400 font-mono text-xs px-2 py-1 rounded text-center outline-none focus:border-emerald-500"
+                        />
+                        <span className="text-xs text-slate-500 font-mono">m</span>
+                      </div>
+                    </div>
+
                     <div className="flex gap-4 font-mono text-sm text-emerald-400">
                       <div className="flex items-center">
                         <span className="text-slate-500 mr-1">LAT:</span>
@@ -782,6 +1029,52 @@ export default function MapDashboard({ user }) {
                         />
                       </div>
                     </div>
+
+                    {/* RADIUS INTERCEPT ALERT BADGE */}
+                    {interceptingEmployees.length > 0 ? (
+                      <div className="pt-3 border-t border-rose-500/30">
+                        <div className="bg-rose-500/10 border-2 border-rose-500/40 rounded-xl p-3.5 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-rose-400 font-black text-xs uppercase tracking-wider">
+                              <AlertTriangle size={16} className="animate-bounce text-rose-400" />
+                              <span>Radius Intercept Alert!</span>
+                            </div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded border border-rose-500/40">
+                              {interceptingEmployees.length} Intercept{interceptingEmployees.length > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          
+                          {interceptingEmployees.map((intercept, idx) => (
+                            <div key={intercept.id || idx} className="bg-slate-900/90 rounded-lg p-2.5 border border-rose-500/30 text-xs">
+                              <div className="flex items-center justify-between text-slate-200 font-bold mb-1">
+                                <span>{intercept.full_name} <span className="text-slate-500 font-normal">({intercept.employee_id || 'ID'})</span></span>
+                                <span className="text-rose-400 font-mono">{intercept.distance} meters apart</span>
+                              </div>
+                              <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-1 border-t border-slate-800">
+                                <span>New ({intercept.newRadius}m) + Existing ({intercept.empRadius}m)</span>
+                                <span className="text-rose-300 font-bold bg-rose-500/20 px-1.5 py-0.5 rounded border border-rose-500/30">
+                                  Overlap: {intercept.overlap}m
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : nearestExistingEmployee ? (
+                      <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                        <div>
+                          <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Nearest Existing Kiosk</p>
+                          <p className="text-xs font-bold text-slate-200">{nearestExistingEmployee.full_name} <span className="text-slate-500 font-normal">({nearestExistingEmployee.employee_id || 'ID'})</span></p>
+                        </div>
+                        <span className="text-xs font-mono font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20">
+                          {nearestExistingEmployee.distance} meters away
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="pt-2 border-t border-slate-800">
+                        <p className="text-[10px] text-slate-500 italic">No existing employee nearby to measure distance.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

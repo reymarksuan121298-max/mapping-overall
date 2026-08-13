@@ -8,11 +8,11 @@ export default function EmployeesPage({ user }) {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   const [franchises, setFranchises] = useState([]);
   const [areas, setAreas] = useState([]);
   const [supervisors, setSupervisors] = useState([]);
-  
+
   const [selectedFranchise, setSelectedFranchise] = useState(user?.franchise_id ? user.franchise_id.toString() : 'all');
   const [selectedArea, setSelectedArea] = useState('all');
   const [selectedSupervisor, setSelectedSupervisor] = useState('all');
@@ -23,12 +23,12 @@ export default function EmployeesPage({ user }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
   const [formData, setFormData] = useState({
-    employee_id: '', 
-    full_name: '', 
-    role: 'Agent', 
-    status: 'Active', 
-    franchise_id: '', 
-    area_id: '', 
+    employee_id: '',
+    full_name: '',
+    role: 'Agent',
+    status: 'Active',
+    franchise_id: '',
+    area_id: '',
     supervisor_id: '',
     contact_number: '',
     municipality: 'None',
@@ -58,7 +58,7 @@ export default function EmployeesPage({ user }) {
     if (modalMode === 'add' && formData.franchise_id && formData.area_id && franchises.length > 0 && areas.length > 0) {
       const franchise = franchises.find(f => f.id.toString() === formData.franchise_id.toString());
       const area = areas.find(a => a.id.toString() === formData.area_id.toString());
-      
+
       if (franchise && area) {
         let prefix = 'EMP';
         const fname = franchise.name.toUpperCase();
@@ -66,9 +66,9 @@ export default function EmployeesPage({ user }) {
         else if (fname.includes('LUCKY BETPLAY') || fname.includes('LBP')) prefix = 'LB';
         else if (fname.includes('GLOWING FORTUNE') || fname.includes('GF')) prefix = 'GF';
         else prefix = fname.split(' ').map(w => w[0]).join('').substring(0, 3);
-        
+
         const areaPart = area.name.toUpperCase().replace(/\s+/g, '-');
-        
+
         // Count existing employees in this specific area to generate sequence
         const matchingEmployees = employees.filter(e => e.employee_id && e.employee_id.startsWith(`${prefix}-${areaPart}-`));
         let maxSuffix = 0;
@@ -80,13 +80,13 @@ export default function EmployeesPage({ user }) {
             if (!isNaN(num) && num > maxSuffix) maxSuffix = num;
           }
         });
-        
+
         const nextSuffix = (maxSuffix + 1).toString().padStart(5, '0');
         const newEmployeeId = `${prefix}-${areaPart}-${nextSuffix}`;
-        
+
         // Only update if it actually changed to prevent infinite loops
         if (formData.employee_id !== newEmployeeId) {
-          setFormData(prev => ({...prev, employee_id: newEmployeeId}));
+          setFormData(prev => ({ ...prev, employee_id: newEmployeeId }));
         }
       }
     }
@@ -111,12 +111,12 @@ export default function EmployeesPage({ user }) {
               areas (name),
               supervisors (name, color)
             `).order('full_name').range(from, to);
-            
+
             if (error) return { error };
             if (!data || data.length === 0) break;
-            
+
             allData = allData.concat(data);
-            
+
             if (data.length < 1000) break;
             from += 1000;
             to += 1000;
@@ -129,14 +129,14 @@ export default function EmployeesPage({ user }) {
       if (areaRes.data) setAreas(areaRes.data);
 
       if (spvrRes.data) {
-        const spvrData = user?.role === 'franchise_admin' 
+        const spvrData = user?.role === 'franchise_admin'
           ? spvrRes.data.filter(s => s.franchise_id === user.franchise_id)
           : spvrRes.data;
         setSupervisors(spvrData);
       }
 
       if (empRes.error) throw empRes.error;
-      
+
       let empData = empRes.data || [];
       if (user?.role === 'franchise_admin') {
         empData = empData.filter(e => e.franchise_id === user.franchise_id);
@@ -156,7 +156,7 @@ export default function EmployeesPage({ user }) {
       const matchesArea = selectedArea === 'all' || emp.area_id?.toString() === selectedArea;
       const matchesSupervisor = selectedSupervisor === 'all' || emp.supervisor_id?.toString() === selectedSupervisor;
       const matchesStatus = selectedStatus === 'all' || emp.status?.toLowerCase() === selectedStatus.toLowerCase();
-      
+
       return matchesSearch && matchesFranchise && matchesArea && matchesSupervisor && matchesStatus;
     });
   }, [employees, searchTerm, selectedFranchise, selectedArea, selectedSupervisor, selectedStatus]);
@@ -164,12 +164,12 @@ export default function EmployeesPage({ user }) {
   const openAddModal = () => {
     setModalMode('add');
     setFormData({
-      employee_id: '', 
-      full_name: '', 
-      role: 'Agent', 
+      employee_id: '',
+      full_name: '',
+      role: 'Agent',
       status: 'Active',
-      franchise_id: user?.franchise_id ? user.franchise_id.toString() : (franchises[0]?.id || ''), 
-      area_id: areas[0]?.id || '', 
+      franchise_id: user?.franchise_id ? user.franchise_id.toString() : (franchises[0]?.id || ''),
+      area_id: areas[0]?.id || '',
       supervisor_id: '',
       contact_number: '',
       municipality: 'None',
@@ -188,11 +188,11 @@ export default function EmployeesPage({ user }) {
   const openEditModal = (emp) => {
     setModalMode('edit');
     setFormData({
-      employee_id: emp.employee_id || '', 
+      employee_id: emp.employee_id || '',
       full_name: emp.full_name || '',
-      role: emp.role || 'Agent', 
+      role: emp.role || 'Agent',
       status: emp.status || 'Active',
-      franchise_id: emp.franchise_id || '', 
+      franchise_id: emp.franchise_id || '',
       area_id: emp.area_id || '',
       supervisor_id: emp.supervisor_id || '',
       contact_number: emp.contact_number || '',
@@ -226,6 +226,20 @@ export default function EmployeesPage({ user }) {
         }
       }
     });
+  };
+
+  const handleToggleStatus = async (emp) => {
+    const newStatus = emp.status === 'Active' ? 'Inactive' : 'Active';
+    setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, status: newStatus } : e));
+    try {
+      const { error } = await supabase.from('employees').update({ status: newStatus }).eq('id', emp.id);
+      if (error) throw error;
+      setAlertState({ isOpen: true, message: `Status updated to ${newStatus}!`, type: 'success' });
+    } catch (err) {
+      console.error('Error toggling status:', err.message);
+      setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, status: emp.status } : e));
+      setAlertState({ isOpen: true, message: 'Failed to update employee status.', type: 'error' });
+    }
   };
 
   const handleGetLocation = () => {
@@ -275,7 +289,7 @@ export default function EmployeesPage({ user }) {
         .getPublicUrl(filePath);
 
       setFormData(prev => ({ ...prev, [fieldName]: data.publicUrl }));
-      
+
     } catch (error) {
       console.error('Error uploading image:', error);
       setAlertState({ isOpen: true, message: error.message || 'Error uploading image.', type: 'error' });
@@ -366,19 +380,19 @@ export default function EmployeesPage({ user }) {
             </h1>
             <p className="text-slate-400 mt-2 font-medium">Manage and view all registered tellers and agents</p>
           </div>
-          
+
           <div className="flex gap-4 relative">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="Search by name or ID..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="bg-slate-800/80 border border-slate-700 text-slate-200 pl-10 pr-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none w-64 shadow-inner"
               />
             </div>
-            <button 
+            <button
               onClick={() => setShowFilters(!showFilters)}
               className={`border hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-inner ${showFilters ? 'bg-slate-700 border-slate-600' : 'bg-slate-800 border-slate-700'}`}
             >
@@ -395,7 +409,7 @@ export default function EmployeesPage({ user }) {
                   {(!user || !user.franchise_id) && (
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Franchise</label>
-                      <select 
+                      <select
                         className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none p-2 cursor-pointer"
                         value={selectedFranchise}
                         onChange={(e) => setSelectedFranchise(e.target.value)}
@@ -410,7 +424,7 @@ export default function EmployeesPage({ user }) {
 
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Area</label>
-                    <select 
+                    <select
                       className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none p-2 cursor-pointer"
                       value={selectedArea}
                       onChange={(e) => setSelectedArea(e.target.value)}
@@ -424,7 +438,7 @@ export default function EmployeesPage({ user }) {
 
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Supervisor</label>
-                    <select 
+                    <select
                       className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none p-2 cursor-pointer"
                       value={selectedSupervisor}
                       onChange={(e) => setSelectedSupervisor(e.target.value)}
@@ -433,8 +447,8 @@ export default function EmployeesPage({ user }) {
                       {supervisors
                         .filter(s => selectedFranchise === 'all' || s.franchise_id?.toString() === selectedFranchise)
                         .map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
                     </select>
                   </div>
 
@@ -445,11 +459,10 @@ export default function EmployeesPage({ user }) {
                         <button
                           key={status}
                           onClick={() => setSelectedStatus(status)}
-                          className={`py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
-                            selectedStatus === status 
-                              ? 'bg-emerald-500 text-white' 
+                          className={`py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${selectedStatus === status
+                              ? 'bg-emerald-500 text-white'
                               : 'bg-slate-900 text-slate-400 hover:bg-slate-700 border border-slate-700'
-                          }`}
+                            }`}
                         >
                           {status}
                         </button>
@@ -462,17 +475,17 @@ export default function EmployeesPage({ user }) {
           </div>
         </header>
 
-        <AlertModal 
-          isOpen={alertState.isOpen} 
-          message={alertState.message} 
-          type={alertState.type} 
-          onClose={() => setAlertState({ ...alertState, isOpen: false })} 
+        <AlertModal
+          isOpen={alertState.isOpen}
+          message={alertState.message}
+          type={alertState.type}
+          onClose={() => setAlertState({ ...alertState, isOpen: false })}
         />
-        <ConfirmModal 
-          isOpen={confirmState.isOpen} 
-          message={confirmState.message} 
-          onConfirm={confirmState.onConfirm} 
-          onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} 
+        <ConfirmModal
+          isOpen={confirmState.isOpen}
+          message={confirmState.message}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
         />
 
         <div className="bg-slate-800/40 backdrop-blur-md border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden">
@@ -523,13 +536,16 @@ export default function EmployeesPage({ user }) {
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-400">{emp.areas?.name || 'N/A'}</td>
                       <td className="px-6 py-4 text-right">
-                        <span className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md font-bold ${
-                          emp.status === 'Active' 
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                            : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                        }`}>
+                        <button
+                          onClick={() => handleToggleStatus(emp)}
+                          title="Click to toggle status (Active / Inactive)"
+                          className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md font-bold cursor-pointer transition-all hover:scale-105 active:scale-95 ${emp.status === 'Active'
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-500/30'
+                              : 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-emerald-500/20 hover:text-emerald-400 hover:border-emerald-500/30'
+                            }`}
+                        >
                           {emp.status}
-                        </span>
+                        </button>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2 opacity-100 transition-opacity">
@@ -551,15 +567,15 @@ export default function EmployeesPage({ user }) {
 
         {/* Modal */}
         {isModalOpen && (
-          <div 
+          <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm"
             onClick={() => setIsModalOpen(false)}
           >
-            <div 
+            <div
               className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 relative flex flex-col max-h-[90vh]"
               onClick={(e) => e.stopPropagation()}
             >
-              
+
               <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between bg-slate-800/50">
                 <div>
                   <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
@@ -577,7 +593,7 @@ export default function EmployeesPage({ user }) {
 
               <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
                 <form id="employee-form" onSubmit={handleSave} className="space-y-6">
-                  
+
                   <div className="grid grid-cols-2 gap-x-6 gap-y-5">
                     {/* Employee ID */}
                     <div>
@@ -586,7 +602,7 @@ export default function EmployeesPage({ user }) {
                         type="text"
                         required
                         value={formData.employee_id}
-                        onChange={(e) => setFormData({...formData, employee_id: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
                         className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600"
                         placeholder="e.g. EMP-101"
                       />
@@ -599,7 +615,7 @@ export default function EmployeesPage({ user }) {
                         type="text"
                         required
                         value={formData.full_name}
-                        onChange={(e) => setFormData({...formData, full_name: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                         className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600"
                         placeholder="e.g. John Doe"
                       />
@@ -611,7 +627,7 @@ export default function EmployeesPage({ user }) {
                       <input
                         type="text"
                         value={formData.contact_number || ''}
-                        onChange={(e) => setFormData({...formData, contact_number: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, contact_number: e.target.value })}
                         className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600"
                         placeholder="e.g. +639123456789"
                       />
@@ -623,15 +639,15 @@ export default function EmployeesPage({ user }) {
                       <select
                         required
                         value={formData.supervisor_id}
-                        onChange={(e) => setFormData({...formData, supervisor_id: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, supervisor_id: e.target.value })}
                         className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all appearance-none"
                       >
                         <option value="">Select Supervisor</option>
                         {supervisors
                           .filter(s => !formData.franchise_id || s.franchise_id?.toString() === formData.franchise_id?.toString())
                           .map(s => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
                       </select>
                     </div>
 
@@ -641,7 +657,7 @@ export default function EmployeesPage({ user }) {
                       <select
                         required
                         value={formData.role}
-                        onChange={(e) => setFormData({...formData, role: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                         className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all appearance-none"
                       >
                         <option value="Agent">Agent</option>
@@ -655,7 +671,7 @@ export default function EmployeesPage({ user }) {
                       <select
                         required
                         value={formData.status}
-                        onChange={(e) => setFormData({...formData, status: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                         className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all appearance-none"
                       >
                         <option value="Active">Active</option>
@@ -670,7 +686,7 @@ export default function EmployeesPage({ user }) {
                         <select
                           required
                           value={formData.franchise_id}
-                          onChange={(e) => setFormData({...formData, franchise_id: e.target.value, supervisor_id: '', municipality_id: ''})}
+                          onChange={(e) => setFormData({ ...formData, franchise_id: e.target.value, supervisor_id: '', municipality_id: '' })}
                           className="w-full bg-slate-900 border border-emerald-500 ring-1 ring-emerald-500/50 text-slate-200 px-4 py-2.5 rounded-xl outline-none transition-all appearance-none"
                         >
                           <option value="">Select Franchise</option>
@@ -687,7 +703,7 @@ export default function EmployeesPage({ user }) {
                       <select
                         required
                         value={formData.area_id}
-                        onChange={(e) => setFormData({...formData, area_id: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, area_id: e.target.value })}
                         className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all appearance-none"
                       >
                         <option value="">Select Area</option>
@@ -702,7 +718,7 @@ export default function EmployeesPage({ user }) {
                       <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Municipality (Optional)</label>
                       <select
                         value={formData.municipality || 'None'}
-                        onChange={(e) => setFormData({...formData, municipality: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, municipality: e.target.value })}
                         className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all appearance-none"
                       >
                         <option value="None">None</option>
@@ -715,7 +731,7 @@ export default function EmployeesPage({ user }) {
                       <input
                         type="text"
                         value={formData.allowed_radius || '100'}
-                        onChange={(e) => setFormData({...formData, allowed_radius: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, allowed_radius: e.target.value })}
                         className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600"
                         placeholder="100"
                       />
@@ -729,7 +745,7 @@ export default function EmployeesPage({ user }) {
                     <input
                       type="text"
                       value={formData.address || ''}
-                      onChange={(e) => setFormData({...formData, address: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                       className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600"
                       placeholder="e.g. 123 Main St, City, Country"
                     />
@@ -737,7 +753,7 @@ export default function EmployeesPage({ user }) {
 
                   {/* Image Uploads */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-                    
+
                     {/* 2x2 Picture */}
                     <div>
                       <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Employee 2x2 Picture</label>
@@ -793,7 +809,7 @@ export default function EmployeesPage({ user }) {
                           )}
                         </div>
                         <div className="flex flex-col justify-center">
-                          <span className="text-xs font-bold text-slate-300 leading-tight mb-2">GPS<br/>Screenshot</span>
+                          <span className="text-xs font-bold text-slate-300 leading-tight mb-2">GPS<br />Screenshot</span>
                           <label className="bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors w-fit cursor-pointer">
                             {uploading.coordinate_screenshot_url ? 'Uploading...' : <><Upload size={12} /> Upload</>}
                             <input type="file" accept="image/*" className="hidden" disabled={uploading.coordinate_screenshot_url} onChange={(e) => handleFileUpload(e, 'coordinate_screenshot_url')} />
@@ -808,8 +824,8 @@ export default function EmployeesPage({ user }) {
                   <div className="pt-6 mt-6 border-t border-slate-700/50">
                     <div className="flex items-center justify-between mb-4">
                       <h4 className="text-[13px] font-bold text-slate-400 uppercase tracking-wider">GPS COORDINATES</h4>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={handleGetLocation}
                         className="bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
                       >
@@ -822,7 +838,7 @@ export default function EmployeesPage({ user }) {
                         <input
                           type="text"
                           value={formData.latitude || ''}
-                          onChange={(e) => setFormData({...formData, latitude: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
                           className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600"
                           placeholder="e.g. 14.5995"
                         />
@@ -832,7 +848,7 @@ export default function EmployeesPage({ user }) {
                         <input
                           type="text"
                           value={formData.longitude || ''}
-                          onChange={(e) => setFormData({...formData, longitude: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
                           className="w-full bg-slate-900 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600"
                           placeholder="e.g. 120.9842"
                         />
