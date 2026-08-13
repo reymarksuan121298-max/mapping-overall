@@ -681,15 +681,11 @@ export default function MapDashboard({ user }) {
             </div>
             <div>
               <span className="text-sm font-bold">Click anywhere on the map to place the agent kiosk</span>
-              {interceptingEmployees.length > 0 ? (
+              {interceptingEmployees.length > 0 && (
                 <p className="text-xs font-black text-rose-400 mt-0.5 animate-pulse">
                   ⚠️ RADIUS INTERCEPT ALERT! Intersects with {interceptingEmployees[0].full_name} ({interceptingEmployees[0].distance}m away, radii overlap by {interceptingEmployees[0].overlap}m)
                 </p>
-              ) : nearestExistingEmployee ? (
-                <p className="text-xs font-semibold text-emerald-400 mt-0.5">
-                  Nearest Kiosk: {nearestExistingEmployee.full_name} ({nearestExistingEmployee.distance} meters away)
-                </p>
-              ) : null}
+              )}
             </div>
           </div>
           <button 
@@ -1038,7 +1034,7 @@ export default function MapDashboard({ user }) {
                     </div>
 
                     {/* RADIUS INTERCEPT ALERT BADGE */}
-                    {interceptingEmployees.length > 0 ? (
+                    {interceptingEmployees.length > 0 && (
                       <div className="pt-3 border-t border-rose-500/30">
                         <div className="bg-rose-500/10 border-2 border-rose-500/40 rounded-xl p-3.5 space-y-2.5">
                           <div className="flex items-center justify-between">
@@ -1066,20 +1062,6 @@ export default function MapDashboard({ user }) {
                             </div>
                           ))}
                         </div>
-                      </div>
-                    ) : nearestExistingEmployee ? (
-                      <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                        <div>
-                          <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Nearest Existing Kiosk</p>
-                          <p className="text-xs font-bold text-slate-200">{nearestExistingEmployee.full_name} <span className="text-slate-500 font-normal">({nearestExistingEmployee.employee_id || 'ID'})</span></p>
-                        </div>
-                        <span className="text-xs font-mono font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20">
-                          {nearestExistingEmployee.distance} meters away
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="pt-2 border-t border-slate-800">
-                        <p className="text-[10px] text-slate-500 italic">No existing employee nearby to measure distance.</p>
                       </div>
                     )}
                   </div>

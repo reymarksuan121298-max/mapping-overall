@@ -322,7 +322,7 @@ const KioskMap = React.memo(function KioskMap({
               </div>
 
               {/* Radius Intercept Alert inside Marker Popup Card */}
-              {analysis?.intercepts && analysis.intercepts.length > 0 ? (
+              {analysis?.intercepts && analysis.intercepts.length > 0 && (
                 <div className="bg-rose-500/10 rounded-xl p-3 border-2 border-rose-500/40 mb-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 text-rose-400 font-black text-xs uppercase tracking-wider">
@@ -349,17 +349,7 @@ const KioskMap = React.memo(function KioskMap({
                     </div>
                   ))}
                 </div>
-              ) : analysis?.nearest ? (
-                <div className="bg-emerald-500/10 rounded-xl p-3 border border-emerald-500/20 mb-3 flex items-center justify-between">
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Nearest Kiosk</p>
-                    <p className="text-xs font-bold text-slate-100 truncate max-w-[180px]">{analysis.nearest.full_name}</p>
-                  </div>
-                  <span className="text-xs font-mono font-black text-emerald-400 bg-emerald-500/20 px-2.5 py-1 rounded-md border border-emerald-500/30">
-                    {analysis.nearest.distance} meters away
-                  </span>
-                </div>
-              ) : null}
+              )}
 
               {/* Main Info Grid */}
               <div className="grid grid-cols-2 gap-3 mb-3">
@@ -481,23 +471,17 @@ const KioskMap = React.memo(function KioskMap({
                   <p className={`text-xs font-black uppercase tracking-wider mb-1 ${nearestToSelected?.isIntercepted ? 'text-rose-400' : 'text-emerald-400'}`}>
                     {nearestToSelected?.isIntercepted ? '⚠️ Radius Intercept Alert!' : 'New Employee Pin'}
                   </p>
-                  {nearestToSelected ? (
+                  {nearestToSelected?.isIntercepted ? (
                     <div className="mt-1 space-y-1">
                       <p className="text-[11px] font-semibold text-slate-300">
-                        Nearest: <span className="font-bold text-slate-100">{nearestToSelected.full_name}</span>
+                        Intercepts: <span className="font-bold text-rose-300">{nearestToSelected.full_name}</span>
                       </p>
-                      <div className={`text-xs font-mono font-black px-2.5 py-1 rounded-md border inline-block ${
-                        nearestToSelected.isIntercepted
-                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
-                          : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                      }`}>
+                      <div className="text-xs font-mono font-black px-2.5 py-1 rounded-md border inline-block bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse">
                         {nearestToSelected.distance} meters apart
                       </div>
-                      {nearestToSelected.isIntercepted && (
-                        <p className="text-[10px] text-rose-400 font-bold">
-                          Radii overlap by {nearestToSelected.overlap}m!
-                        </p>
-                      )}
+                      <p className="text-[10px] text-rose-400 font-bold">
+                        Radii overlap by {nearestToSelected.overlap}m!
+                      </p>
                     </div>
                   ) : (
                     <p className="text-[11px] text-slate-400">Ready to save</p>
@@ -520,29 +504,23 @@ const KioskMap = React.memo(function KioskMap({
               </Popup>
             </Marker>
 
-            {/* Polyline to nearest existing employee */}
-            {nearestToSelected && (
+            {/* Polyline ONLY when radii intercept */}
+            {nearestToSelected && nearestToSelected.isIntercepted && (
               <Polyline 
                 positions={[
                   [parseFloat(selectedLocation.lat), parseFloat(selectedLocation.lng)],
                   [nearestToSelected.latitude, nearestToSelected.longitude]
                 ]}
                 pathOptions={{ 
-                  color: nearestToSelected.isIntercepted ? '#f43f5e' : '#10b981', 
+                  color: '#f43f5e', 
                   weight: 3, 
                   dashArray: '6 6', 
                   opacity: 0.9 
                 }}
               >
                 <Tooltip permanent direction="center" opacity={0.95}>
-                  <span className={`font-mono font-black text-xs px-2.5 py-1 rounded-md border shadow-xl ${
-                    nearestToSelected.isIntercepted
-                      ? 'bg-rose-950 text-rose-300 border-rose-500/60'
-                      : 'bg-slate-900 text-emerald-400 border-emerald-500/40'
-                  }`}>
-                    {nearestToSelected.isIntercepted 
-                      ? `⚠️ ${nearestToSelected.distance}m (${nearestToSelected.overlap}m overlap)` 
-                      : `${nearestToSelected.distance} meters`}
+                  <span className="font-mono font-black text-xs px-2.5 py-1 rounded-md border shadow-xl bg-rose-950 text-rose-300 border-rose-500/60">
+                    ⚠️ {nearestToSelected.distance}m ({nearestToSelected.overlap}m overlap)
                   </span>
                 </Tooltip>
               </Polyline>
