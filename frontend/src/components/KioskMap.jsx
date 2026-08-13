@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, Circle, Polyline, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { User, MapPin, Layers, Shield, Clock, Trash2, Edit3 } from 'lucide-react';
+import { User, MapPin, Layers, Shield, Clock, Trash2, Edit3, AlertTriangle } from 'lucide-react';
 
 // Fix for default marker icons
 delete L.Icon.Default.prototype._getIconUrl;
