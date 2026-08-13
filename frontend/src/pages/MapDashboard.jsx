@@ -527,6 +527,12 @@ export default function MapDashboard({ user }) {
     setIsEmployeeModalOpen(true);
   }, []);
 
+  const handleRemoveSelectedLocation = useCallback(() => {
+    setSelectedLocation(null);
+    setIsEmployeeModalOpen(false);
+    setIsAddingEmployee(false);
+  }, []);
+
   const handleEditEmployee = useCallback((kiosk) => {
     setSelectedLocation({ lat: kiosk.latitude, lng: kiosk.longitude });
     setEditingEmployeeId(kiosk.id);
@@ -609,6 +615,7 @@ export default function MapDashboard({ user }) {
           autoOpenKiosk={autoOpenKiosk}
           selectedLocation={selectedLocation}
           newRadius={newRadius}
+          onRemoveSelectedLocation={handleRemoveSelectedLocation}
         />
       </div>
 

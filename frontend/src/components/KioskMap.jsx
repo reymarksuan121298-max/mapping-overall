@@ -159,7 +159,8 @@ const KioskMap = React.memo(function KioskMap({
   supervisorLocations = [], 
   autoOpenKiosk, 
   selectedLocation,
-  newRadius = 100
+  newRadius = 100,
+  onRemoveSelectedLocation
 }) {
   const [activeLayer, setActiveLayer] = useState('street');
   const [isLayerMenuOpen, setIsLayerMenuOpen] = useState(false);
@@ -501,6 +502,20 @@ const KioskMap = React.memo(function KioskMap({
                   ) : (
                     <p className="text-[11px] text-slate-400">Ready to save</p>
                   )}
+
+                  {/* Remove Pin Button */}
+                  <div className="mt-3 pt-2.5 border-t border-slate-800 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onRemoveSelectedLocation) onRemoveSelectedLocation();
+                      }}
+                      className="w-full bg-rose-500/20 hover:bg-rose-500/35 text-rose-400 border border-rose-500/40 text-[10px] font-black uppercase tracking-widest py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-md"
+                    >
+                      <Trash2 size={12} /> REMOVE PIN
+                    </button>
+                  </div>
                 </div>
               </Popup>
             </Marker>
