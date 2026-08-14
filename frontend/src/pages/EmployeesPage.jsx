@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
-import { Users, Search, Filter, Plus, Edit2, Trash2, X, Upload, Store, MapPin, AlertTriangle } from 'lucide-react';
+import { Users, Search, Filter, Plus, Edit2, Trash2, X, Upload, Store, MapPin, AlertTriangle, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import AlertModal from '../components/AlertModal';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -105,8 +106,7 @@ export default function EmployeesPage({ user }) {
           let to = 999;
           while (true) {
             const { data, error } = await supabase.from('employees').select(`
-              id, employee_id, full_name, role, status, franchise_id, area_id, supervisor_id,
-              photo_url, id_photo_url, coordinate_screenshot_url,
+              *,
               franchises (name),
               areas (name),
               supervisors (name, color)
@@ -369,6 +369,38 @@ export default function EmployeesPage({ user }) {
     }
   };
 
+  const handleExportExcel = () => {
+    if (filteredEmployees.length === 0) {
+      setAlertState({ isOpen: true, message: 'No employees to export.', type: 'error' });
+      return;
+    }
+
+    const exportData = filteredEmployees.map(emp => ({
+      'Employee ID': emp.employee_id || '',
+      'Full Name': emp.full_name || '',
+      'Role': emp.role || '',
+      'Status': emp.status || '',
+      'Contact Number': emp.contact_number || '',
+      'Franchise': emp.franchises?.name || '',
+      'Area': emp.areas?.name || '',
+      'Supervisor': emp.supervisors?.name || '',
+      'Address': emp.address || '',
+      'Municipality': emp.municipality || '',
+      'Latitude': emp.latitude || '',
+      'Longitude': emp.longitude || '',
+      'Allowed Radius (m)': emp.radius_meters || emp.allowed_radius || 100,
+      'Photo URL': emp.photo_url || '',
+      'ID Photo URL': emp.id_photo_url || '',
+      'Coordinate Screenshot URL': emp.coordinate_screenshot_url || ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Employees");
+    
+    XLSX.writeFile(workbook, `Employees_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   return (
     <div className="h-full bg-slate-900 overflow-y-auto custom-scrollbar p-8">
       <div className="w-full relative">
@@ -397,6 +429,9 @@ export default function EmployeesPage({ user }) {
               className={`border hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-inner ${showFilters ? 'bg-slate-700 border-slate-600' : 'bg-slate-800 border-slate-700'}`}
             >
               <Filter size={16} className={showFilters ? 'text-emerald-400' : ''} /> Filter
+            </button>
+            <button onClick={handleExportExcel} className="bg-blue-500 hover:bg-blue-400 text-slate-900 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+              <Download size={16} /> Export Excel
             </button>
             <button onClick={openAddModal} className="bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-bold text-sm shadow-[0_0_15px_rgba(16,185,129,0.3)]">
               <Plus size={16} /> Add Employee

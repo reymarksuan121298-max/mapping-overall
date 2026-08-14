@@ -52,6 +52,30 @@ const createSupervisorIcon = () => {
   });
 };
 
+// Create Lucky Betplay HQ Icon
+const createHqIcon = () => {
+  return new L.DivIcon({
+    className: 'custom-div-icon bg-transparent border-0',
+    html: `
+      <div class="relative w-10 h-10 flex items-center justify-center">
+        <div class="absolute inset-0 bg-amber-400 rounded-full animate-ping opacity-60"></div>
+        <div class="relative w-9 h-9 bg-amber-500 rounded-full border-2 border-white shadow-[0_0_20px_rgba(245,158,11,0.9)] flex items-center justify-center text-slate-950 font-black text-sm">
+          🏢
+        </div>
+      </div>
+    `,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+    popupAnchor: [0, -20]
+  });
+};
+
+const LUCKY_BETPLAY_HQ = {
+  name: 'Lucky Betplay Office',
+  lat: 10.339497372932037,
+  lng: 123.92834492423775
+};
+
 function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
   if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
   const l1 = parseFloat(lat1);
@@ -445,6 +469,26 @@ const KioskMap = React.memo(function KioskMap({
         {/* Render Circles for existing kiosks */}
         {renderCircles}
 
+        {/* Lucky Betplay Office (HQ Marker) */}
+        <Marker
+          position={[LUCKY_BETPLAY_HQ.lat, LUCKY_BETPLAY_HQ.lng]}
+          icon={createHqIcon()}
+        >
+          <Popup minWidth={240}>
+            <div className="p-3 text-center bg-slate-900 rounded-xl border border-amber-500/40 shadow-xl">
+              <div className="flex items-center justify-center gap-1.5 text-amber-400 font-black text-xs uppercase tracking-wider mb-1">
+                <span>🏢 {LUCKY_BETPLAY_HQ.name}</span>
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-500/40 inline-block mb-2">
+                Main Office / HQ
+              </span>
+              <div className="bg-slate-950 p-2 rounded-lg border border-slate-800 font-mono text-[11px] text-amber-300">
+                {LUCKY_BETPLAY_HQ.lat.toFixed(6)} • {LUCKY_BETPLAY_HQ.lng.toFixed(6)}
+              </div>
+            </div>
+          </Popup>
+        </Marker>
+
         {/* Visual distance line, radius circle & intercept tooltip when adding a new employee pin */}
         {selectedLocation && selectedLocation.lat != null && selectedLocation.lng != null && (
           <>
@@ -611,24 +655,7 @@ const KioskMap = React.memo(function KioskMap({
       {renderCircles}
       {renderMarkers}
       
-      {/* Supervisor Live Locations */}
-      {supervisorLocations.map((loc) => (
-        <Marker
-          key={`spvr-loc-${loc.supervisor_id}`}
-          position={[parseFloat(loc.latitude), parseFloat(loc.longitude)]}
-          icon={createSupervisorIcon()}
-        >
-          <Popup>
-            <div className="p-2 min-w-[200px] bg-slate-900 rounded-lg">
-              <h3 className="font-black text-blue-400 text-sm mb-1">Live Tracking</h3>
-              <p className="text-xs text-slate-300">Supervisor ID: {loc.supervisor_id}</p>
-              <p className="text-[10px] text-slate-500 mt-2">
-                Last updated: {new Date(loc.last_updated).toLocaleTimeString()}
-              </p>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
+
     </MapContainer>
     </div>
   );

@@ -886,10 +886,10 @@ export default function MapDashboard({ user }) {
           onClick={() => setIsEmployeeModalOpen(false)}
         >
           <div 
-            className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between bg-slate-800/50">
+            <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between bg-slate-800/50 shrink-0">
               <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
                 <UserPlus className="text-emerald-500" size={20} />
                 {editingEmployeeId ? 'Edit Employee Pin' : 'Add New Employee Pin'}
@@ -899,7 +899,7 @@ export default function MapDashboard({ user }) {
               </button>
             </div>
             
-            <form onSubmit={handleSaveEmployee} className="p-6">
+            <form onSubmit={handleSaveEmployee} className="p-6 overflow-y-auto custom-scrollbar flex-1">
               <div className="grid grid-cols-2 gap-6">
                 {/* Left Column */}
                 <div className="space-y-4">
