@@ -133,10 +133,10 @@ export default function AttendancePage({ user }) {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <span className={`text-sm font-bold ${log.distance_meters > 200 ? 'text-rose-400' : 'text-slate-300'}`}>
+                          <span className={`text-sm font-bold ${log.distance_meters > 100 ? 'text-rose-400' : 'text-slate-300'}`}>
                             {log.distance_meters ? `${log.distance_meters.toFixed(1)}m` : 'N/A'}
                           </span>
-                          {log.distance_meters > 200 && (
+                          {log.distance_meters > 100 && (
                             <span className="text-[9px] bg-rose-500/20 text-rose-400 px-1.5 py-0.5 rounded-sm uppercase font-black">Out of bounds</span>
                           )}
                         </div>

@@ -301,7 +301,7 @@ export default function EmployeesPage({ user }) {
   };
 
   const checkGeofence = async (lat, lng) => {
-    const query = `[out:json];(node["amenity"="school"](around:200,${lat},${lng});way["amenity"="school"](around:200,${lat},${lng});relation["amenity"="school"](around:200,${lat},${lng});node["amenity"="place_of_worship"](around:200,${lat},${lng});way["amenity"="place_of_worship"](around:200,${lat},${lng});relation["amenity"="place_of_worship"](around:200,${lat},${lng}););out body;`;
+    const query = `[out:json];(node["amenity"="school"](around:100,${lat},${lng});way["amenity"="school"](around:100,${lat},${lng});relation["amenity"="school"](around:100,${lat},${lng});node["amenity"="place_of_worship"](around:100,${lat},${lng});way["amenity"="place_of_worship"](around:100,${lat},${lng});relation["amenity"="place_of_worship"](around:100,${lat},${lng}););out body;`;
     const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
     try {
       const response = await fetch(url);
@@ -345,7 +345,7 @@ export default function EmployeesPage({ user }) {
         const geoCheck = await checkGeofence(formData.latitude, formData.longitude);
         if (geoCheck.restricted) {
           const placeType = geoCheck.isSchool && geoCheck.isChurch ? 'a school and a church' : geoCheck.isSchool ? 'a school' : 'a church';
-          setAlertState({ isOpen: true, message: `Cannot add employee: The selected location is within 200 meters of ${placeType}.`, type: 'error' });
+          setAlertState({ isOpen: true, message: `Cannot add employee: The selected location is within 100 meters of ${placeType}.`, type: 'error' });
           return; // Stop the save process
         }
       }
