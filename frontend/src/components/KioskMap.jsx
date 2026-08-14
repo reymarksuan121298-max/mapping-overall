@@ -391,7 +391,13 @@ const KioskMap = React.memo(function KioskMap({
                 {/* Assignment */}
                 <div className="bg-slate-900/50 rounded-xl p-3.5 border border-slate-700/50 hover:border-slate-600 transition-colors">
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Assignment</p>
-                  <p className="text-sm font-bold text-slate-200">{kiosk.role || 'Agent'}</p>
+                  <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold ${
+                    kiosk.role === 'Reliever'
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                      : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                  }`}>
+                    {kiosk.role || 'Agent'}
+                  </span>
                 </div>
               </div>
 

@@ -68,6 +68,7 @@ export default function MapDashboard({ user }) {
   const [selectedArea, setSelectedArea] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedSupervisor, setSelectedSupervisor] = useState('all');
+  const [selectedRole, setSelectedRole] = useState('all');
   const [isTacticalOpen, setIsTacticalOpen] = useState(false);
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
   const [alertState, setAlertState] = useState({ isOpen: false, message: '', type: 'error' });
@@ -429,6 +430,9 @@ export default function MapDashboard({ user }) {
     if (selectedSupervisor !== 'all') {
       filtered = filtered.filter(e => e.supervisor_id?.toString() === selectedSupervisor);
     }
+    if (selectedRole !== 'all') {
+      filtered = filtered.filter(e => e.role?.toLowerCase() === selectedRole.toLowerCase());
+    }
 
     if (autoOpenKiosk && !filtered.some(e => e.id === autoOpenKiosk.id)) {
       const target = employees.find(e => e.id === autoOpenKiosk.id);
@@ -438,7 +442,7 @@ export default function MapDashboard({ user }) {
     }
     
     return filtered;
-  }, [employees, debouncedSearch, selectedFranchise, selectedArea, selectedStatus, selectedSupervisor, autoOpenKiosk]);
+  }, [employees, debouncedSearch, selectedFranchise, selectedArea, selectedStatus, selectedSupervisor, selectedRole, autoOpenKiosk]);
 
   const stats = useMemo(() => {
     let active = 0;
@@ -607,7 +611,7 @@ export default function MapDashboard({ user }) {
         ) : null}
         <KioskMap 
           kiosks={filteredEmployees} 
-          isFiltered={selectedFranchise !== 'all' || selectedArea !== 'all' || selectedSupervisor !== 'all' || searchTerm !== ''}
+          isFiltered={selectedFranchise !== 'all' || selectedArea !== 'all' || selectedSupervisor !== 'all' || selectedRole !== 'all' || searchTerm !== ''}
           isAddingEmployee={isAddingEmployee} 
           onLocationSelected={handleLocationSelected}
           onEditEmployee={handleEditEmployee}
@@ -840,6 +844,23 @@ export default function MapDashboard({ user }) {
                   </select>
                   <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-amber-400 pointer-events-none" size={16} />
                 </div>
+              </div>
+            </div>
+
+            {/* Role Filter */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Role Filter</label>
+              <div className="relative">
+                <select 
+                  className="w-full bg-purple-500/10 border border-purple-500/30 text-purple-300 font-bold text-sm rounded-2xl appearance-none outline-none py-3.5 px-4 cursor-pointer hover:bg-purple-500/20 transition-colors"
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value)}
+                >
+                  <option value="all" className="bg-slate-900 text-slate-200">All Roles Selected</option>
+                  <option value="Agent" className="bg-slate-900 text-slate-200">Agent</option>
+                  <option value="Reliever" className="bg-slate-900 text-slate-200">Reliever</option>
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-purple-400 pointer-events-none" size={16} />
               </div>
             </div>
 

@@ -18,6 +18,7 @@ export default function EmployeesPage({ user }) {
   const [selectedArea, setSelectedArea] = useState('all');
   const [selectedSupervisor, setSelectedSupervisor] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedRole, setSelectedRole] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
 
   // Modal State
@@ -156,10 +157,11 @@ export default function EmployeesPage({ user }) {
       const matchesArea = selectedArea === 'all' || emp.area_id?.toString() === selectedArea;
       const matchesSupervisor = selectedSupervisor === 'all' || emp.supervisor_id?.toString() === selectedSupervisor;
       const matchesStatus = selectedStatus === 'all' || emp.status?.toLowerCase() === selectedStatus.toLowerCase();
+      const matchesRole = selectedRole === 'all' || emp.role?.toLowerCase() === selectedRole.toLowerCase();
 
-      return matchesSearch && matchesFranchise && matchesArea && matchesSupervisor && matchesStatus;
+      return matchesSearch && matchesFranchise && matchesArea && matchesSupervisor && matchesStatus && matchesRole;
     });
-  }, [employees, searchTerm, selectedFranchise, selectedArea, selectedSupervisor, selectedStatus]);
+  }, [employees, searchTerm, selectedFranchise, selectedArea, selectedSupervisor, selectedStatus, selectedRole]);
 
   const openAddModal = () => {
     setModalMode('add');
@@ -488,6 +490,24 @@ export default function EmployeesPage({ user }) {
                   </div>
 
                   <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Role</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {['all', 'agent', 'reliever'].map((roleOption) => (
+                        <button
+                          key={roleOption}
+                          onClick={() => setSelectedRole(roleOption)}
+                          className={`py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${selectedRole === roleOption
+                              ? 'bg-emerald-500 text-white'
+                              : 'bg-slate-900 text-slate-400 hover:bg-slate-700 border border-slate-700'
+                            }`}
+                        >
+                          {roleOption}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</label>
                     <div className="grid grid-cols-3 gap-2">
                       {['all', 'active', 'inactive'].map((status) => (
@@ -559,8 +579,12 @@ export default function EmployeesPage({ user }) {
                       </td>
                       <td className="px-6 py-4 font-mono text-sm text-slate-400">{emp.employee_id}</td>
                       <td className="px-6 py-4">
-                        <span className="bg-slate-800 text-blue-400 text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border border-slate-700/50 font-bold">
-                          {emp.role}
+                        <span className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border font-bold ${
+                          emp.role === 'Reliever'
+                            ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                            : 'bg-blue-500/10 text-blue-400 border-slate-700/50'
+                        }`}>
+                          {emp.role || 'Agent'}
                         </span>
                       </td>
                       <td className="px-6 py-4">
