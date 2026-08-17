@@ -5,6 +5,13 @@ import { MapPin, Users, Activity, Filter, Layers, Map as MapIcon, Shield, X, Sea
 import AlertModal from '../components/AlertModal';
 import ConfirmModal from '../components/ConfirmModal';
 
+function isValidLatLng(lat, lng) {
+  if (lat == null || lng == null || lat === '' || lng === '') return false;
+  const pLat = parseFloat(lat);
+  const pLng = parseFloat(lng);
+  return !isNaN(pLat) && !isNaN(pLng);
+}
+
 function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
   if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
   const l1 = parseFloat(lat1);
@@ -468,7 +475,7 @@ export default function MapDashboard({ user }) {
 
     const intercepts = [];
     employees.forEach(emp => {
-      if (emp.latitude != null && emp.longitude != null && emp.id !== editingEmployeeId) {
+      if (isValidLatLng(emp.latitude, emp.longitude) && emp.id !== editingEmployeeId) {
         const dist = calculateDistanceMeters(curLat, curLng, emp.latitude, emp.longitude);
         const empRadius = parseInt(emp.radius_meters || emp.allowed_radius || '100', 10) || 100;
         const sumRadius = newRadius + empRadius;
@@ -499,7 +506,7 @@ export default function MapDashboard({ user }) {
     let nearest = null;
 
     employees.forEach(emp => {
-      if (emp.latitude != null && emp.longitude != null && emp.id !== editingEmployeeId) {
+      if (isValidLatLng(emp.latitude, emp.longitude) && emp.id !== editingEmployeeId) {
         const dist = calculateDistanceMeters(curLat, curLng, emp.latitude, emp.longitude);
         if (dist !== null && dist < minDistance) {
           minDistance = dist;

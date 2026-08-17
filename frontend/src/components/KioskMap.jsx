@@ -76,6 +76,13 @@ const LUCKY_BETPLAY_HQ = {
   lng: 123.92834492423775
 };
 
+function isValidLatLng(lat, lng) {
+  if (lat == null || lng == null || lat === '' || lng === '') return false;
+  const pLat = parseFloat(lat);
+  const pLng = parseFloat(lng);
+  return !isNaN(pLat) && !isNaN(pLng);
+}
+
 function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
   if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
   const l1 = parseFloat(lat1);
@@ -100,7 +107,7 @@ function AutoOpenMarkerController({ autoOpenKiosk, markerRefs }) {
   const map = useMap();
 
   useEffect(() => {
-    if (autoOpenKiosk && autoOpenKiosk.latitude != null && autoOpenKiosk.longitude != null) {
+    if (autoOpenKiosk && isValidLatLng(autoOpenKiosk.latitude, autoOpenKiosk.longitude)) {
       const lat = parseFloat(autoOpenKiosk.latitude);
       const lng = parseFloat(autoOpenKiosk.longitude);
 
@@ -140,7 +147,7 @@ function MapBounds({ kiosks, isFiltered }) {
   const map = useMap();
 
   useEffect(() => {
-    const validKiosks = kiosks ? kiosks.filter(k => k.latitude != null && k.longitude != null) : [];
+    const validKiosks = kiosks ? kiosks.filter(k => isValidLatLng(k.latitude, k.longitude)) : [];
     if (validKiosks.length > 0 && isFiltered) {
       const bounds = L.latLngBounds(validKiosks.map(k => [k.latitude, k.longitude]));
       // Add padding and limit max zoom
@@ -191,7 +198,7 @@ const KioskMap = React.memo(function KioskMap({
   const markerRefs = useRef({});
 
   const renderCircles = useMemo(() => {
-    return kiosks.filter(k => k.latitude != null && k.longitude != null).map((kiosk) => {
+    return kiosks.filter(k => isValidLatLng(k.latitude, k.longitude)).map((kiosk) => {
       const spvrColor = kiosk.supervisors?.color || '#10b981';
       const radius = parseInt(kiosk.allowed_radius, 10) || 100;
       return (
@@ -208,7 +215,7 @@ const KioskMap = React.memo(function KioskMap({
   // Pre-calculate nearest & intercept info for every existing kiosk card
   const kioskAnalysisMap = useMemo(() => {
     const map = {};
-    const valid = kiosks.filter(k => k.latitude != null && k.longitude != null);
+    const valid = kiosks.filter(k => isValidLatLng(k.latitude, k.longitude));
     if (valid.length > 500) return map;
 
     for (let i = 0; i < valid.length; i++) {
@@ -264,7 +271,7 @@ const KioskMap = React.memo(function KioskMap({
     let nearest = null;
 
     kiosks.forEach(k => {
-      if (k.latitude != null && k.longitude != null) {
+      if (isValidLatLng(k.latitude, k.longitude)) {
         const dist = calculateDistanceMeters(curLat, curLng, k.latitude, k.longitude);
         if (dist !== null && dist < minDistance) {
           minDistance = dist;
@@ -283,7 +290,7 @@ const KioskMap = React.memo(function KioskMap({
 
   // Aggressively memoize markers so they are completely immune to local state changes (like opening the Layer menu)
   const renderMarkers = useMemo(() => {
-    return kiosks.filter(k => k.latitude != null && k.longitude != null).map((kiosk) => {
+    return kiosks.filter(k => isValidLatLng(k.latitude, k.longitude)).map((kiosk) => {
       const spvrColor = kiosk.supervisors?.color || '#10b981';
       const analysis = kioskAnalysisMap[kiosk.id];
 

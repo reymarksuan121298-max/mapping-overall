@@ -114,14 +114,16 @@ export default function RealtimeMonitoringPage({ user }) {
       if (locRes.error) throw locRes.error;
       if (empRes.error) throw empRes.error;
 
-      let filteredLocs = locRes.data;
-      let filteredEmps = empRes.data || [];
+      const isValid = (lat, lng) => lat != null && lng != null && lat !== '' && lng !== '' && !isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng));
+      let filteredLocs = (locRes.data || []).filter(d => isValid(d.latitude, d.longitude));
+      let filteredEmps = (empRes.data || []).filter(e => isValid(e.latitude, e.longitude));
+      
       if (user?.role === 'franchise_admin') {
-         filteredLocs = locRes.data.filter(d => d.supervisors?.franchise_id === user.franchise_id);
+         filteredLocs = filteredLocs.filter(d => d.supervisors?.franchise_id === user.franchise_id);
          filteredEmps = filteredEmps.filter(e => e.franchise_id === user.franchise_id);
       }
 
-      setLocations(filteredLocs || []);
+      setLocations(filteredLocs);
       setEmployees(filteredEmps);
     } catch (err) {
       console.error('Error fetching live tracking data:', err);
